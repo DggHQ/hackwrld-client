@@ -1,31 +1,149 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"math/rand"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	nats "github.com/nats-io/nats.go"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+type AttackerData struct {
+	Attacker     string  `json:"attacker"`
+	StealerLevel float32 `json:"stealerlevel"`
+}
+
 const (
-	//defaultConfigFile = "config.json"
 	baseMineRate = 0.001
 )
 
 var (
-	// config        CommandCenter
 	commandCenter CommandCenter
-	nc, natsError = nats.Connect("localhost", nil, nats.PingInterval(20*time.Second), nats.MaxPingsOutstanding(5))
+	nc, natsError = nats.Connect(getEnv("NATS_HOST", "localhost"), nil, nats.PingInterval(20*time.Second), nats.MaxPingsOutstanding(5))
 	clientConfig  = clientv3.Config{
-		Endpoints:   []string{"10.10.90.5:2379", "10.10.90.6:2379"},
+		Endpoints:   getEnvToArray("ETCD_ENDPOINTS", "10.10.90.5:2379;10.10.90.6:2379"),
 		DialTimeout: time.Second * 5,
 	}
 )
 
+// Handle state endpoint
+func state(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"state": commandCenter.State})
+}
+
+// Handle miner upgrade endpoint
+func minerupgrade(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeCryptoMiner(nc)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
+}
+
+// Handle scanner upgrade endpoint
+func scannerupgrade(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeScanner(nc)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
+}
+
+// Handle firewall upgrade endpoint
+func firewallupgrade(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeFirewall(nc)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
+}
+
+// Handle stealer upgrade endpoint
+func stealerupgrade(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeStealer(nc)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
+}
+
+// Generate random floating numbers
+func randFloats(min, max float32, n int) []float32 {
+	res := make([]float32, n)
+	for i := range res {
+		res[i] = min + rand.Float32()*(max-min)
+	}
+	return res
+}
+
+// Handle scan outgoing endpoint
+func scanout(c *gin.Context) {
+	scans, msg, err := commandCenter.RequestScan(nc)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": msg})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "scans": scans, "message": msg})
+}
+
+// NEEDS TWEAKING: This will handle incoming attacks. Maybe use a simple Pseudo Random Distribution?
+// Example: 100 Numbers between 0 and 1, make a certain amount of them 1, others 0. Shuffle them, if 30 1s are there 30% to hit a 1.
+// https://stackoverflow.com/questions/33994677/pick-a-random-value-from-a-go-slice
+func incomingattack(c *gin.Context) {
+	var data AttackerData
+	commandCenter := commandCenter.GetState()
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Viable solution:
+	log.Println(randFloats(data.StealerLevel/commandCenter.State.Firewall.Level, commandCenter.State.Firewall.Level-data.StealerLevel, 1)[0])
+	random := rand.Float32() * (commandCenter.State.Firewall.Level - data.StealerLevel)
+	switch chance := data.StealerLevel / commandCenter.State.Firewall.Level; {
+	case chance >= 1:
+		log.Printf("Chance: %f - Random: %f", chance, random)
+		c.JSON(http.StatusOK, gin.H{"success": true})
+		return
+	case chance < random:
+		log.Printf("Chance: %f - Random: %f", chance, random)
+		c.JSON(http.StatusForbidden, gin.H{"success": false})
+		return
+	default:
+		log.Printf("Chance: %f - Random: %f", chance, random)
+		c.JSON(http.StatusForbidden, gin.H{"success": true})
+		return
+	}
+}
+
 //TODO: Subscribe to game master to get game settings
 
+// Run commandCenter after config init
 func main() {
 	if natsError != nil {
 		log.Fatalln(natsError)
@@ -36,36 +154,22 @@ func main() {
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 
-	// // Config load
-	// file := defaultConfigFile
-	// f, err := ioutil.ReadFile(file)
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
-
-	// err = json.Unmarshal(f, &config)
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
-	// // end of config load
-
-	// commandCenter = commandCenter.Prepare(config)
-
+	// Mine in background
 	go commandCenter.Mine(wg)
+	// Listen to scan topic and reply if conditions are met
+	go commandCenter.ReplyScan(nc)
 
-	go func() {
-		time.Sleep(time.Second * 5)
-		_, err := commandCenter.UpgradeCryptoMiner(nc)
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}()
+	router := gin.Default()
+	router.POST("/upgrade/miner", minerupgrade)
+	router.POST("/upgrade/scanner", scannerupgrade)
+	router.POST("/upgrade/firewall", firewallupgrade)
+	router.POST("/upgrade/stealer", stealerupgrade)
+	router.POST("/attack/in", incomingattack)
+	router.POST("/attack/out", func(ctx *gin.Context) {})
+	router.POST("/scan/out", scanout)
+	router.GET("/state", state)
 
-	// if natsError != nil {
-	// 	log.Fatalln(natsError)
-	// }
-	// defer nc.Close()
-	// go commandCenter.PublishState(nc, wg) //publishState(wg)
+	router.Run(fmt.Sprintf("0.0.0.0:%s", getEnv("PORT", "8088")))
 	wg.Wait()
 
 }

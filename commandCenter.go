@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,45 +18,55 @@ import (
 type CommandCenter struct {
 	EtcdClient *clientv3.Client
 	ID         string
-	State      struct {
-		ID    string `json:"id"`
-		Funds struct {
-			Amount float32 `json:"amount"`
-		} `json:"funds"`
-		Firewall struct {
-			Level int `json:"level"`
-		} `json:"firewall"`
-		Scanner struct {
-			Level int `json:"level"`
-		} `json:"scanner"`
-		CryptoMiner struct {
-			Level int `json:"level"`
-		} `json:"cryptoMiner"`
-	} `json:"state"`
+	State      State `json:"state"`
 }
 
-// Firewall   struct {
-// 	Level int `json:"level"`
-// } `json:"firewall"`
-// Funds struct {
-// 	Amount float32 `json:"amount"`
-// } `json:"funds"`
-// Scanner struct {
-// 	Level int `json:"level"`
-// } `json:"scanner"`
-// CryptoMiner struct {
-// 	Level int `json:"level"`
-// } `json:"cryptoMiner"`
+type State struct {
+	ID    string `json:"id"`
+	Funds struct {
+		Amount float32 `json:"amount"`
+	} `json:"funds"`
+	Firewall struct {
+		Level float32 `json:"level"`
+	} `json:"firewall"`
+	Scanner struct {
+		Level float32 `json:"level"`
+	} `json:"scanner"`
+	CryptoMiner struct {
+		Level float32 `json:"level"`
+	} `json:"cryptoMiner"`
+	Stealer struct {
+		Level float32 `json:"level"`
+	} `json:"stealer"`
+}
 
 // UpgradeReply struct
 type UpgradeReply struct {
-	Allow bool
-	Cost  float32
+	Allow bool    `json:"success"`
+	Cost  float32 `json:"cost"`
+}
+
+// Handle setting of variables of env var is not set
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return defaultValue
+	}
+	return value
+}
+
+// Handle setting of variables of env var is not set
+func getEnvToArray(key, defaultValue string) []string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return strings.Split(defaultValue, ";")
+	}
+	return strings.Split(value, ";")
 }
 
 func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
-	// Set player id from env variable TODO: Env variable
-	c.ID = "123456"
+	// Set player id from env variable
+	c.ID = getEnv("ID", "123456")
 	c.State.ID = c.ID
 	c.State.CryptoMiner.Level = 1
 
@@ -66,8 +78,6 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	if err != nil {
 		log.Panicln("Could not setup etcd3 client.")
 	}
-	// Close connection when everything is done
-	//defer cli.Close()
 	// Set the client in the struct
 	c.EtcdClient = cli
 
@@ -94,6 +104,7 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	return *c
 }
 
+// Get value from etcd3
 func (c *CommandCenter) GetValue(key string) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	resp, err := c.EtcdClient.Get(ctx, key)
@@ -108,16 +119,18 @@ func (c *CommandCenter) GetValue(key string) []byte {
 	}
 }
 
+// Put valie to etcd3
 func (c *CommandCenter) PutValue(key string, value string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	_, err := c.EtcdClient.Put(ctx, key, value)
 	cancel()
-	fmt.Printf("Put value %s on topic: %s\n", value, key)
+	//fmt.Printf("Put value %s on topic: %s\n", value, key)
 	if err != nil {
 		log.Panicln("Could not put key")
 	}
 }
 
+// Save state to etcd3 server to save state into
 func (c *CommandCenter) SaveState() {
 	value, marshalErr := json.Marshal(c.State)
 	if marshalErr != nil {
@@ -126,154 +139,213 @@ func (c *CommandCenter) SaveState() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	_, err := c.EtcdClient.Put(ctx, c.ID, string(value))
 	cancel()
-	fmt.Printf("Put value %s on topic: %s\n", value, c.ID)
+	//fmt.Printf("Put value %s on topic: %s\n", value, c.ID)
 	if err != nil {
 		log.Panicln("Could not put key")
 	}
 }
 
-// // Prepare Command Center
-// func (c *CommandCenter) Prepare(savedCommandCenter CommandCenter) CommandCenter {
-
-// 	// Configure ID
-// 	c.ID = savedCommandCenter.ID
-// 	if c.ID == "" {
-// 		uuidWithHyphen := uuid.New()
-// 		uuid := strings.Replace(uuidWithHyphen.String(), "-", "", -1)
-// 		c.ID = uuid
-// 	}
-// 	// Configure Funds
-// 	c.Funds = savedCommandCenter.Funds
-// 	// Confirue Firewall
-// 	c.Firewall = savedCommandCenter.Firewall
-// 	// Configure Scanner
-// 	c.Scanner = savedCommandCenter.Scanner
-// 	// Configure CryptoMiner
-// 	c.CryptoMiner = savedCommandCenter.CryptoMiner
-// 	return *c
-// }
-
-// // Save state of Command Center
-// func (c *CommandCenter) Save() error {
-// 	jsonConfig, err := json.Marshal(c)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	ioutil.WriteFile("config.json", jsonConfig, os.ModePerm)
-// 	return nil
-// }
-
-// Mine crypto
+// Mine "crypto"
 func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
 		minerLevel := c.State.CryptoMiner.Level
 		c.State.Funds.Amount += baseMineRate * float32(minerLevel)
 		c.SaveState()
-		// err := c.Save()
-		// if err != nil {
-		// 	log.Fatalln(err)
-		// }
 		time.Sleep(time.Second * 1)
 	}
 }
 
-// // PublishState CommandCenter State
-// func (c *CommandCenter) PublishState(nc *nats.Conn, wg *sync.WaitGroup) {
-// 	defer wg.Done()
-// 	for {
-// 		state, err := json.Marshal(&c)
-// 		if err != nil {
-// 			log.Fatalln(err)
-// 		}
-// 		if err := nc.Publish(fmt.Sprintf("commandcenter.%s.state", c.ID), []byte(state)); err != nil {
-// 			log.Fatal(err)
-// 		}
-// 		time.Sleep(time.Second * 10)
-// 	}
-// }
-
-// // UpgradeFirewall on CommandCenter
-// func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn) (bool, error) {
-// 	reply := UpgradeReply{}
-// 	state, err := json.Marshal(&c)
-// 	if err != nil {
-// 		log.Fatalln(err)
-// 		return false, err
-// 	}
-// 	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeFirewall", c.ID), []byte(state), time.Second)
-// 	if err != nil {
-// 		log.Fatalln(err)
-// 		return false, err
-// 	}
-// 	log.Printf("UpdateFirewall reply: %s", msg.Data)
-// 	jsonErr := json.Unmarshal(msg.Data, &reply)
-// 	if jsonErr != nil {
-// 		log.Fatalln(jsonErr)
-// 		return false, err
-// 	}
-// 	if reply.Allow {
-// 		c.Funds.Amount = c.Funds.Amount - reply.Cost
-// 		c.Firewall.Level++
-// 		return true, nil
-// 	}
-// 	return false, nil
-// 	//c.Firewall.Level++
-// }
-
-// // UpgradeScanner on CommandCenter
-// func (c *CommandCenter) UpgradeScanner(nc *nats.Conn) (bool, error) {
-// 	reply := UpgradeReply{}
-// 	state, err := json.Marshal(&c)
-// 	if err != nil {
-// 		log.Fatalln(err)
-// 		return false, err
-// 	}
-// 	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeScanner", c.ID), []byte(state), time.Second)
-// 	if err != nil {
-// 		log.Fatalln(err)
-// 		return false, err
-// 	}
-// 	log.Printf("UpdateScanner reply: %s", msg.Data)
-// 	jsonErr := json.Unmarshal(msg.Data, &reply)
-// 	if jsonErr != nil {
-// 		log.Fatalln(jsonErr)
-// 		return false, err
-// 	}
-// 	if reply.Allow {
-// 		c.Funds.Amount = c.Funds.Amount - reply.Cost
-// 		c.Scanner.Level++
-// 		return true, nil
-// 	}
-// 	return false, nil
-// 	//c.Scanner.Level++
-// }
-
-// UpgradeCryptoMiner on CommandCenter
-func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn) (bool, error) {
+// UpgradeStealer on CommandCenter
+func (c *CommandCenter) UpgradeStealer(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
-		return false, err
+		return false, c, reply, err
+	}
+	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeStealer", c.ID), []byte(state), time.Second)
+	if err != nil {
+		log.Fatalln(err)
+		return false, c, reply, err
+	}
+	log.Printf("UpdateStealer reply: %s", msg.Data)
+	jsonErr := json.Unmarshal(msg.Data, &reply)
+	if jsonErr != nil {
+		log.Fatalln(jsonErr)
+		return false, c, reply, err
+	}
+	if reply.Allow {
+		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		c.State.Stealer.Level++
+		return true, c, reply, err
+	}
+	return false, c, reply, err
+}
+
+// UpgradeFirewall on CommandCenter
+func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
+	reply := UpgradeReply{}
+	state, err := json.Marshal(&c.State)
+	if err != nil {
+		log.Fatalln(err)
+		return false, c, reply, err
+	}
+	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeFirewall", c.ID), []byte(state), time.Second)
+	if err != nil {
+		log.Fatalln(err)
+		return false, c, reply, err
+	}
+	log.Printf("UpdateFirewall reply: %s", msg.Data)
+	jsonErr := json.Unmarshal(msg.Data, &reply)
+	if jsonErr != nil {
+		log.Fatalln(jsonErr)
+		return false, c, reply, err
+	}
+	if reply.Allow {
+		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		c.State.Firewall.Level++
+		return true, c, reply, err
+	}
+	return false, c, reply, err
+}
+
+// UpgradeScanner on CommandCenter
+func (c *CommandCenter) UpgradeScanner(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
+	reply := UpgradeReply{}
+	state, err := json.Marshal(&c.State)
+	if err != nil {
+		log.Fatalln(err)
+		return false, c, reply, err
+	}
+	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeScanner", c.ID), []byte(state), time.Second)
+	if err != nil {
+		log.Fatalln(err)
+		return false, c, reply, err
+	}
+	log.Printf("UpdateScanner reply: %s", msg.Data)
+	jsonErr := json.Unmarshal(msg.Data, &reply)
+	if jsonErr != nil {
+		log.Fatalln(jsonErr)
+		return false, c, reply, err
+	}
+	if reply.Allow {
+		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		c.State.Scanner.Level++
+		return true, c, reply, err
+	}
+	return false, c, reply, nil
+}
+
+// UpgradeCryptoMiner on CommandCenter
+func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
+	reply := UpgradeReply{}
+	state, err := json.Marshal(&c.State)
+	if err != nil {
+		log.Fatalln(err)
+		return false, c, reply, err
 	}
 	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeMiner", c.ID), []byte(state), time.Second)
 	if err != nil {
 		log.Fatalln(err)
-		return false, err
+		return false, c, reply, err
 	}
 	log.Printf("UpdateMiner reply: %s", msg.Data)
 	jsonErr := json.Unmarshal(msg.Data, &reply)
 	if jsonErr != nil {
 		log.Fatalln(jsonErr)
-		return false, err
+		return false, c, reply, err
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
 		c.State.CryptoMiner.Level++
-		return true, nil
+		return true, c, reply, nil
 	}
-	return false, nil
+	return false, c, reply, nil
+}
 
-	//c.CryptoMiner.Level++
+// Subscribe to scan topic to reply to other players when they scan.
+// This not reply when the incoming command center id is the same as the current instance
+// When the foreign command center scanner level has a higher level than this command center's firewall, reply
+func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
+	if _, err := nc.Subscribe("scan", func(m *nats.Msg) {
+		// Initialize CommandCenter struct
+		foreignCommandCenter := State{}
+		// Load received values
+		err := json.Unmarshal(m.Data, &foreignCommandCenter)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		// If the scanning command center is the same do not allow scan
+		if c.ID == foreignCommandCenter.ID {
+			return
+		} else {
+
+			// If the command center is foreign and their scanner level is higher than this firewall level, allow scan
+			if foreignCommandCenter.Scanner.Level > c.State.Firewall.Level {
+				jsonReply, err := json.Marshal(c.State)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				m.Respond(jsonReply)
+			}
+			return
+		}
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
+	// This costs money, so we remove coins based on the level of the scanner. First check if enough funds are available for scan.
+	cost := c.State.Scanner.Level * 0.1
+	if cost > c.State.Funds.Amount {
+		err := fmt.Errorf("not enough funds. cost: %f", cost)
+		return nil, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
+	} else {
+		c.State.Funds.Amount = c.State.Funds.Amount - cost
+	}
+
+	var states = []State{}
+	state, err := json.Marshal(&c.State)
+	if err != nil {
+		log.Fatalln(err)
+		return nil, "could not marshal json", err
+	}
+	log.Println("Subscribing to scan.")
+	sub, err := nc.SubscribeSync(fmt.Sprintf("commandcenter.%s.scanreply", c.ID))
+	if err != nil {
+		log.Fatal(err)
+	}
+	nc.Flush()
+
+	// Send the request
+	log.Println("Publishing to scan.")
+	// Publish scan event to game master
+	nc.Publish("scanevent", []byte(state))
+	nc.PublishRequest("scan", fmt.Sprintf("commandcenter.%s.scanreply", c.ID), []byte(state))
+
+	// Wait for a moment and gather messages
+	max := 100 * time.Millisecond
+	start := time.Now()
+	for time.Since(start) < max {
+		log.Println("Iterate through messages")
+		msg, err := sub.NextMsg(1 * time.Second)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		st := &State{}
+		json.Unmarshal(msg.Data, st)
+		states = append(states, *st)
+	}
+	log.Println("Unsubscribing")
+	sub.Unsubscribe()
+	return states, "successful scan", nil
+}
+
+// Get state of CommandCenter
+func (c *CommandCenter) GetState() *CommandCenter {
+	return c
 }
