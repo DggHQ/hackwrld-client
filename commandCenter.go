@@ -18,7 +18,11 @@ import (
 type CommandCenter struct {
 	EtcdClient *clientv3.Client
 	ID         string
-	State      State `json:"state"`
+	StealData  struct {
+		LastAttackTime time.Time
+		AttackInterval time.Duration
+	}
+	State State `json:"state"`
 }
 
 type State struct {
@@ -46,6 +50,13 @@ type UpgradeReply struct {
 	Cost  float32 `json:"cost"`
 }
 
+// StealReply struct
+type StealReply struct {
+	Success     bool    `json:"success"`
+	GainedCoins float32 `json:"gainedCoins"`
+	CoolDown    bool    `json:"cooldown"`
+}
+
 // Handle setting of variables of env var is not set
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
@@ -65,13 +76,17 @@ func getEnvToArray(key, defaultValue string) []string {
 }
 
 func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
-	// Set player id from env variable
+	// Configure commandCenter State
 	c.ID = getEnv("ID", "123456")
 	c.State.ID = c.ID
 	c.State.CryptoMiner.Level = 1
 	c.State.Scanner.Level = 1
 	c.State.Firewall.Level = 1
 	c.State.Stealer.Level = 1
+	// Set initial protection period on boot
+	c.StealData.LastAttackTime = time.Now()
+	// Configure allowed attack interval
+	c.StealData.AttackInterval = time.Second * 300
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
@@ -298,6 +313,9 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 	return nil
 }
 
+// Requests a scan from the network. This is a scatter-gather method.
+// We subscribe to the reply topic synchronously, then publish a request to all commandcenters.
+// Commandcenters all subscribe to scan by default. If the scanning command center has a scanner level higher than the firewall of others, they must respond.
 func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 	// This costs money, so we remove coins based on the level of the scanner. First check if enough funds are available for scan.
 	cost := c.State.Scanner.Level * 0.1
@@ -322,7 +340,6 @@ func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 	nc.Flush()
 
 	// Send the request
-	log.Println("Publishing to scan.")
 	// Publish scan event to game master
 	nc.Publish("scanevent", []byte(state))
 	nc.PublishRequest("scan", fmt.Sprintf("commandcenter.%s.scanreply", c.ID), []byte(state))
@@ -331,7 +348,6 @@ func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 	max := 100 * time.Millisecond
 	start := time.Now()
 	for time.Since(start) < max {
-		log.Println("Iterate through messages")
 		msg, err := sub.NextMsg(1 * time.Second)
 		if err != nil {
 			log.Println(err)
@@ -341,9 +357,159 @@ func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 		json.Unmarshal(msg.Data, st)
 		states = append(states, *st)
 	}
-	log.Println("Unsubscribing")
 	sub.Unsubscribe()
 	return states, "successful scan", nil
+}
+
+// Subscribe to steal topic to reply to other players when they attempt to steal.
+// This will not reply when the incoming command center id is the same as the current instance
+// When the foreign command center stealer level has a higher level than this command center's firewall, reply
+func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
+	if _, err := nc.Subscribe(fmt.Sprintf("commandcenter.%s.stealEndpoint", c.ID), func(m *nats.Msg) {
+		log.Println("Incoming steal event.")
+		// Initialize CommandCenter struct
+		foreignCommandCenter := State{}
+		// Load received values
+		err := json.Unmarshal(m.Data, &foreignCommandCenter)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		// If the scanning command center is the same do not allow scan
+		if c.ID == foreignCommandCenter.ID {
+			return
+		} else {
+			// Check if there is a cooldown.
+			if time.Since(c.StealData.LastAttackTime) < c.StealData.AttackInterval {
+				log.Println("Still in cooldown.")
+				stealReply := StealReply{
+					Success:     false,
+					GainedCoins: 0,
+					CoolDown:    true,
+				}
+				jsonReply, err := json.Marshal(stealReply)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				m.Respond(jsonReply)
+				return
+			}
+			// Set attack time because the defending command center is out of cooldown
+			c.StealData.LastAttackTime = time.Now()
+			// Stealer Level
+			stealerLevel := foreignCommandCenter.Stealer.Level
+			// Get current level difference
+			lvldiff := int(stealerLevel) - int(c.State.Firewall.Level)
+			log.Printf("Level diff: %d", lvldiff)
+			if lvldiff <= 0 {
+				// Level of the stealer is not high enough. No coins stolen.
+				stealReply := StealReply{
+					Success:     false,
+					GainedCoins: 0,
+					CoolDown:    false,
+				}
+				jsonReply, err := json.Marshal(stealReply)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				m.Respond(jsonReply)
+				return
+
+			} else {
+				// Level of stealer is higher
+
+				// Current Funds = 5.11
+				// futureFunds   = 5
+				// futureFunds   < 5.11? remove 0.11 from Funds and add to stealAttempts, update current Funds
+				// Do not remove targetfunds if firewall level changes mid op.
+				// Do not remove targetfunds if that would mean sinking below 0
+
+				// Create a fixed size array based on the level difference
+				stealAttempts := make([]float32, lvldiff)
+				// Create a coin cache
+				var coincache float32
+				// Dyncamically determine amount to steal per attempt by level.
+				stealAmount := float32(0.01) * stealerLevel
+				log.Printf("Coins are being stolen! %f per attempt!", stealAmount)
+				// Try to steal money on each iteration. Logic is described on top.
+				for i := range stealAttempts {
+					stealAttempts[i] = float32(i)
+					//  futureFunds := c.State.Funds.Amount - stealAmount; futureFunds > c.State.Funds.Amount
+					if c.State.Funds.Amount-stealAmount <= 0 {
+						// Player loses no money because it would cause a negative value of the firewall level changed mid loop.
+						if c.State.Firewall.Level >= stealerLevel {
+							coincache += 0
+						} else {
+							coincache += c.State.Funds.Amount
+							c.State.Funds.Amount = 0
+							break
+						}
+					} else {
+						// Steal money from command center
+						c.State.Funds.Amount -= stealAmount
+						// Store in cache
+						coincache += stealAmount
+					}
+				}
+				// After successfully stealing from the target, send a reply to the attacker
+				stealReply := StealReply{
+					Success:     true,
+					GainedCoins: coincache,
+					CoolDown:    false,
+				}
+				jsonReply, err := json.Marshal(stealReply)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				m.Respond(jsonReply)
+				return
+			}
+		}
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Here we want to start a steal event. Compared to the scan, this only targets specific command centers by ID.
+func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealReply, string, error) {
+	var stealReply StealReply
+	// This costs money, so we remove coins based on the level of the stealer. First check if enough funds are available for scan.
+	cost := c.State.Stealer.Level * 0.1
+	if cost > c.State.Funds.Amount {
+		err := fmt.Errorf("not enough funds. cost: %f", cost)
+		return stealReply, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
+	} else {
+		c.State.Funds.Amount = c.State.Funds.Amount - cost
+	}
+	state, err := json.Marshal(&c.State)
+	if err != nil {
+		log.Fatalln(err)
+		return stealReply, "could not marshal json", err
+	}
+	// Subscribe temporarily to a created stealReply topic to listen for responses from the target
+	sub, err := nc.SubscribeSync(fmt.Sprintf("commandcenter.%s.stealReply", c.ID))
+	if err != nil {
+		log.Fatal(err)
+	}
+	nc.Flush()
+	// Publish steal event to game master
+	nc.Publish("stealevent", []byte(state))
+	nc.PublishRequest(fmt.Sprintf("commandcenter.%s.stealEndpoint", targetId), fmt.Sprintf("commandcenter.%s.stealReply", c.ID), []byte(state))
+
+	// Wait for a single response
+	for {
+		msg, err := sub.NextMsg(5 * time.Second)
+		if err != nil {
+			log.Fatal(err)
+		}
+		json.Unmarshal(msg.Data, &stealReply)
+		break
+	}
+	sub.Unsubscribe()
+	// Add coins to account. If no coins are gained, then nothing will be added.
+	c.State.Funds.Amount += stealReply.GainedCoins
+
+	return stealReply, "successful steal operation", nil
 }
 
 // Get state of CommandCenter
