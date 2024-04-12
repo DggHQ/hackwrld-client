@@ -509,6 +509,11 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 	sub.Unsubscribe()
 	// Add coins to account. If no coins are gained, then nothing will be added.
 	c.State.Funds.Amount += stealReply.GainedCoins
+	// Return reply with error on cooldown
+	if stealReply.CoolDown {
+		err := fmt.Errorf("target is on cooldown")
+		return stealReply, "Target is on cooldown", err
+	}
 
 	return stealReply, "successful steal operation", nil
 }

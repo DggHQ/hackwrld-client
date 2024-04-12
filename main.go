@@ -126,6 +126,7 @@ func steal(c *gin.Context) {
 	// Try stealing from target. Target is determined by body
 	reply, msg, err := commandCenter.StealFromTarget(data.TargetId, nc)
 	if err != nil {
+		// Not enough funds or cooldown
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "reply": reply, "message": msg})
 		return
 	}
