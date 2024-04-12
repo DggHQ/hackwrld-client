@@ -69,8 +69,9 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.ID = getEnv("ID", "123456")
 	c.State.ID = c.ID
 	c.State.CryptoMiner.Level = 1
-
-	println(c.State.CryptoMiner.Level)
+	c.State.Scanner.Level = 1
+	c.State.Firewall.Level = 1
+	c.State.Stealer.Level = 1
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
