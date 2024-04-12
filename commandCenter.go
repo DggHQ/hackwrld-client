@@ -435,9 +435,10 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 					stealAttempts[i] = float32(i)
 					//  futureFunds := c.State.Funds.Amount - stealAmount; futureFunds > c.State.Funds.Amount
 					if c.State.Funds.Amount-stealAmount <= 0 {
-						// Player loses no money because it would cause a negative value of the firewall level changed mid loop.
+						// Player loses no money because firewall level changed mid loop.
 						if c.State.Firewall.Level >= stealerLevel {
 							coincache += 0
+							// Player all money and stealer gets the rest because the steal amount would cause a negative number.
 						} else {
 							coincache += c.State.Funds.Amount
 							c.State.Funds.Amount = 0
