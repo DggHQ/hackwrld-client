@@ -29,6 +29,7 @@ type State struct {
 	ID    string `json:"id"`
 	Funds struct {
 		Amount float32 `json:"amount"`
+		*sync.RWMutex
 	} `json:"funds"`
 	Firewall struct {
 		Level float32 `json:"level"`
@@ -212,7 +213,9 @@ func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
 		minerLevel := c.State.CryptoMiner.Level
+		c.State.Funds.Lock()
 		c.State.Funds.Amount += baseMineRate * float32(minerLevel)
+		c.State.Funds.Unlock()
 		monitor.MinedCoins.WithLabelValues(c.ID).Add(float64(baseMineRate * float32(minerLevel)))
 		time.Sleep(time.Second * 1)
 	}
@@ -221,6 +224,8 @@ func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 // UpgradeStealer on CommandCenter
 func (c *CommandCenter) UpgradeStealer(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
+	c.State.Funds.Lock()
+	defer c.State.Funds.Unlock()
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
@@ -249,6 +254,8 @@ func (c *CommandCenter) UpgradeStealer(nc *nats.Conn) (bool, *CommandCenter, Upg
 // UpgradeFirewall on CommandCenter
 func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
+	c.State.Funds.Lock()
+	defer c.State.Funds.Unlock()
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
@@ -277,6 +284,8 @@ func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn) (bool, *CommandCenter, Up
 // UpgradeScanner on CommandCenter
 func (c *CommandCenter) UpgradeScanner(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
+	c.State.Funds.Lock()
+	defer c.State.Funds.Unlock()
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
@@ -305,6 +314,8 @@ func (c *CommandCenter) UpgradeScanner(nc *nats.Conn) (bool, *CommandCenter, Upg
 // UpgradeCryptoMiner on CommandCenter
 func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
+	c.State.Funds.Lock()
+	defer c.State.Funds.Unlock()
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
@@ -369,6 +380,8 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 	// This costs money, so we remove coins based on the level of the scanner. First check if enough funds are available for scan.
 	cost := c.State.Scanner.Level * 0.1
+	c.State.Funds.Lock()
+	defer c.State.Funds.Unlock()
 	if cost > c.State.Funds.Amount {
 		err := fmt.Errorf("not enough funds. cost: %f", cost)
 		return nil, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
@@ -489,6 +502,7 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				stealAmount := float32(0.01) * stealerLevel
 				log.Printf("Coins are being stolen! %f per attempt!", stealAmount)
 				// Try to steal money on each iteration. Logic is described on top.
+				c.State.Funds.Lock()
 				for i := range stealAttempts {
 					stealAttempts[i] = float32(i)
 					//  futureFunds := c.State.Funds.Amount - stealAmount; futureFunds > c.State.Funds.Amount
@@ -509,6 +523,7 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 						coincache += stealAmount
 					}
 				}
+				c.State.Funds.Unlock()
 				monitor.LostCoins.WithLabelValues(c.ID, foreignCommandCenter.ID).Add(float64(coincache))
 				// After successfully stealing from the target, send a reply to the attacker
 				stealReply := StealReply{
@@ -533,6 +548,8 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 // Here we want to start a steal event. Compared to the scan, this only targets specific command centers by ID.
 func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealReply, string, error) {
 	var stealReply StealReply
+	c.State.Funds.Lock()
+	defer c.State.Funds.Unlock()
 	// This costs money, so we remove coins based on the level of the stealer. First check if enough funds are available for scan.
 	cost := c.State.Stealer.Level * 0.1
 	if cost > c.State.Funds.Amount {
