@@ -332,6 +332,7 @@ func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 		return nil, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
 	} else {
 		c.State.Funds.Amount = c.State.Funds.Amount - cost
+		monitor.SpentCoins.WithLabelValues(c.ID).Add(float64(cost))
 	}
 
 	var states = []State{}
@@ -497,6 +498,7 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 		return stealReply, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
 	} else {
 		c.State.Funds.Amount = c.State.Funds.Amount - cost
+		monitor.SpentCoins.WithLabelValues(c.ID).Add(float64(cost))
 	}
 	state, err := json.Marshal(&c.State)
 	if err != nil {
