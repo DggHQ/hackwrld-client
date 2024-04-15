@@ -56,6 +56,8 @@ type UpgradeReply struct {
 
 // StealReply struct
 type StealReply struct {
+	Attacker    string  `json:"attacker"`
+	Defender    string  `json:"defender"`
 	Success     bool    `json:"success"`
 	GainedCoins float32 `json:"gainedCoins"`
 	CoolDown    bool    `json:"cooldown"`
@@ -446,6 +448,8 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 			// Check if there is a cooldown.
 			if time.Since(c.StealData.LastAttackTime) < c.StealData.AttackInterval {
 				stealReply := StealReply{
+					Defender:    c.ID,
+					Attacker:    foreignCommandCenter.ID,
 					Success:     false,
 					GainedCoins: 0,
 					CoolDown:    true,
@@ -469,6 +473,8 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				c.StealData.AttackInterval = time.Minute * 5
 				// Level of the stealer is not high enough. No coins stolen.
 				stealReply := StealReply{
+					Defender:    c.ID,
+					Attacker:    foreignCommandCenter.ID,
 					Success:     false,
 					GainedCoins: 0,
 					CoolDown:    false,
@@ -528,6 +534,8 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				monitor.LostCoins.WithLabelValues(c.ID, foreignCommandCenter.ID).Add(float64(coincache))
 				// After successfully stealing from the target, send a reply to the attacker
 				stealReply := StealReply{
+					Defender:    c.ID,
+					Attacker:    foreignCommandCenter.ID,
 					Success:     true,
 					GainedCoins: coincache,
 					CoolDown:    false,
@@ -582,6 +590,9 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 			log.Fatal(err)
 		}
 		json.Unmarshal(msg.Data, &stealReply)
+		// Send stealreply data to stealresult topic to let others know who stole from whom
+		nc.Publish("stealresult", msg.Data)
+		nc.Flush()
 		break
 	}
 	sub.Unsubscribe()
