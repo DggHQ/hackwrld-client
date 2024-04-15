@@ -195,6 +195,11 @@ func main() {
 	go commandCenter.ReplySteal(nc)
 	// Update cooldown value in goroutine
 	go commandCenter.UpdateCoolDown()
+	// Run task to continuosly save state each minute.
+	// This is done to reduce load on the storage backend.
+	go commandCenter.SaveStateContinuous()
+	// Listen to topic to reset the instance
+	go commandCenter.ListenReset(nc)
 
 	router := gin.Default()
 	router.POST("/upgrade/miner", minerupgrade)

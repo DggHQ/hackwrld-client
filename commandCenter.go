@@ -149,8 +149,51 @@ func (c *CommandCenter) PutValue(key string, value string) {
 	}
 }
 
-// Save state to etcd3 server to save state into
-func (c *CommandCenter) SaveState() {
+// Delete value from etcd3
+func (c *CommandCenter) DeleteState(key string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	_, err := c.EtcdClient.Delete(ctx, key)
+	cancel()
+	if err != nil {
+		log.Panicln("Could not delete key")
+		return err
+	}
+	return nil
+}
+
+// Deletes the state of the commandcenter from etcd3 and restarts the command center
+func (c *CommandCenter) ListenReset(nc *nats.Conn) {
+	if _, err := nc.Subscribe("reset", func(m *nats.Msg) {
+		err := c.DeleteState(c.ID)
+		if err != nil {
+			log.Println("Could not reset command center")
+			return
+		}
+		os.Exit(0)
+	}); err != nil {
+		log.Println(err)
+	}
+}
+
+// Save state to etcd3 server
+func (c *CommandCenter) SaveStateContinuous() {
+	ticker := time.NewTicker(1 * time.Minute)
+	for range ticker.C {
+		value, marshalErr := json.Marshal(c.State)
+		if marshalErr != nil {
+			log.Panicf("Could not save state.\n")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_, err := c.EtcdClient.Put(ctx, c.ID, string(value))
+		cancel()
+		if err != nil {
+			log.Panicln("Could not put key")
+		}
+	}
+}
+
+// Save state to etcd3 server right now
+func (c *CommandCenter) SaveStateImmediate() {
 	value, marshalErr := json.Marshal(c.State)
 	if marshalErr != nil {
 		log.Panicf("Could not save state.\n")
@@ -158,10 +201,10 @@ func (c *CommandCenter) SaveState() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	_, err := c.EtcdClient.Put(ctx, c.ID, string(value))
 	cancel()
-	//fmt.Printf("Put value %s on topic: %s\n", value, c.ID)
 	if err != nil {
 		log.Panicln("Could not put key")
 	}
+
 }
 
 // Mine "crypto"
@@ -171,7 +214,6 @@ func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 		minerLevel := c.State.CryptoMiner.Level
 		c.State.Funds.Amount += baseMineRate * float32(minerLevel)
 		monitor.MinedCoins.WithLabelValues(c.ID).Add(float64(baseMineRate * float32(minerLevel)))
-		c.SaveState()
 		time.Sleep(time.Second * 1)
 	}
 }
