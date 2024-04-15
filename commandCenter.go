@@ -85,8 +85,8 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Stealer.Level = 1
 	// Set initial protection period on boot
 	c.StealData.LastAttackTime = time.Now()
-	// Configure allowed attack interval
-	c.StealData.AttackInterval = time.Second * 300
+	// Configure starting attack interval
+	c.StealData.AttackInterval = time.Minute * 5
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
@@ -115,6 +115,7 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 		if err != nil {
 			log.Panicln("Could not unmarshal.")
 		}
+		monitor.MinedCoins.WithLabelValues(c.ID).Add(float64(c.State.Funds.Amount))
 	}
 	// Check for existing state now
 	return *c
@@ -405,6 +406,8 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 			lvldiff := int(stealerLevel) - int(c.State.Firewall.Level)
 			log.Printf("Level diff: %d", lvldiff)
 			if lvldiff <= 0 {
+				// Reset the attack interval to the default 5 minutes
+				c.StealData.AttackInterval = time.Minute * 5
 				// Level of the stealer is not high enough. No coins stolen.
 				stealReply := StealReply{
 					Success:     false,
@@ -419,6 +422,12 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				return
 
 			} else {
+				// To balance strong players attacking weaker player:
+				// The greater the level difference between attacker and defender the greater the cooldown the defender will receive, protecting them for longer.
+				// Default will always be 5 minutes + level difference
+				// Attacking weaker players will protect them for a long time, allowing them to catch up again.
+				attackCooldown := 5 + lvldiff
+				c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
 				// Level of stealer is higher
 
 				// Current Funds = 5.11
