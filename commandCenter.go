@@ -91,6 +91,7 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.StealData.LastAttackTime = time.Now()
 	// Configure starting attack interval
 	c.StealData.AttackInterval = time.Minute * 5
+	c.State.Funds.RWMutex = &sync.RWMutex{}
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
