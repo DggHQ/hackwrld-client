@@ -115,7 +115,6 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 		if err != nil {
 			log.Panicln("Could not unmarshal.")
 		}
-		monitor.MinedCoins.WithLabelValues(c.ID).Add(float64(c.State.Funds.Amount))
 	}
 	// Check for existing state now
 	return *c
