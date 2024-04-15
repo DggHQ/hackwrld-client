@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	nats "github.com/nats-io/nats.go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -32,6 +33,7 @@ var (
 		Endpoints:   getEnvToArray("ETCD_ENDPOINTS", "10.10.90.5:2379;10.10.90.6:2379"),
 		DialTimeout: time.Second * 5,
 	}
+	monitor = Monitor{}
 )
 
 // Handle state endpoint
@@ -164,6 +166,16 @@ func steal(c *gin.Context) {
 
 //TODO: Subscribe to game master to get game settings
 
+func init() {
+	monitor.Init()
+}
+func promHandler() gin.HandlerFunc {
+	h := promhttp.Handler()
+	return func(ctx *gin.Context) {
+		h.ServeHTTP(ctx.Writer, ctx.Request)
+	}
+}
+
 // Run commandCenter after config init
 func main() {
 	if natsError != nil {
@@ -187,11 +199,11 @@ func main() {
 	router.POST("/upgrade/scanner", scannerupgrade)
 	router.POST("/upgrade/firewall", firewallupgrade)
 	router.POST("/upgrade/stealer", stealerupgrade)
-	//router.POST("/attack/in", incomingattack)
 	router.POST("/attack/out", func(ctx *gin.Context) {})
 	router.POST("/scan/out", scanout)
 	router.POST("/steal", steal)
 	router.GET("/state", state)
+	router.GET("/metrics", promHandler())
 
 	router.Run(fmt.Sprintf("0.0.0.0:%s", getEnv("PORT", "8088")))
 	wg.Wait()

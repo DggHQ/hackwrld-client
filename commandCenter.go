@@ -167,6 +167,7 @@ func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 	for {
 		minerLevel := c.State.CryptoMiner.Level
 		c.State.Funds.Amount += baseMineRate * float32(minerLevel)
+		monitor.MinedCoins.WithLabelValues(c.ID).Add(float64(baseMineRate * float32(minerLevel)))
 		c.SaveState()
 		time.Sleep(time.Second * 1)
 	}
@@ -193,6 +194,7 @@ func (c *CommandCenter) UpgradeStealer(nc *nats.Conn) (bool, *CommandCenter, Upg
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		monitor.SpentCoins.WithLabelValues(c.ID).Add(float64(reply.Cost))
 		c.State.Stealer.Level++
 		return true, c, reply, err
 	}
@@ -220,6 +222,7 @@ func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn) (bool, *CommandCenter, Up
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		monitor.SpentCoins.WithLabelValues(c.ID).Add(float64(reply.Cost))
 		c.State.Firewall.Level++
 		return true, c, reply, err
 	}
@@ -247,6 +250,7 @@ func (c *CommandCenter) UpgradeScanner(nc *nats.Conn) (bool, *CommandCenter, Upg
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		monitor.SpentCoins.WithLabelValues(c.ID).Add(float64(reply.Cost))
 		c.State.Scanner.Level++
 		return true, c, reply, err
 	}
@@ -274,6 +278,7 @@ func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn) (bool, *CommandCenter,
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		monitor.SpentCoins.WithLabelValues(c.ID).Add(float64(reply.Cost))
 		c.State.CryptoMiner.Level++
 		return true, c, reply, nil
 	}
@@ -380,7 +385,6 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 		} else {
 			// Check if there is a cooldown.
 			if time.Since(c.StealData.LastAttackTime) < c.StealData.AttackInterval {
-				log.Println("Still in cooldown.")
 				stealReply := StealReply{
 					Success:     false,
 					GainedCoins: 0,
@@ -451,6 +455,7 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 						coincache += stealAmount
 					}
 				}
+				monitor.LostCoins.WithLabelValues(c.ID, foreignCommandCenter.ID).Add(float64(coincache))
 				// After successfully stealing from the target, send a reply to the attacker
 				stealReply := StealReply{
 					Success:     true,
@@ -509,6 +514,7 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 	sub.Unsubscribe()
 	// Add coins to account. If no coins are gained, then nothing will be added.
 	c.State.Funds.Amount += stealReply.GainedCoins
+	monitor.StolenCoins.WithLabelValues(c.ID).Add(float64(stealReply.GainedCoins))
 	// Return reply with error on cooldown
 	if stealReply.CoolDown {
 		err := fmt.Errorf("target is on cooldown")
