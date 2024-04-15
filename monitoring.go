@@ -9,6 +9,7 @@ type Monitor struct {
 	SpentCoins  *prometheus.CounterVec
 	LostCoins   *prometheus.CounterVec
 	StolenCoins *prometheus.CounterVec
+	CoolDown    *prometheus.GaugeVec
 }
 
 func (m *Monitor) Init() *Monitor {
@@ -24,10 +25,14 @@ func (m *Monitor) Init() *Monitor {
 	m.StolenCoins = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "hackwrld_stolen_coins",
 		Help: "Total amount of coins gained by stealing"}, []string{"id"})
+	m.CoolDown = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "hackwrld_defender_cooldown",
+		Help: "The current cooldown time of the player"}, []string{"id"})
 
 	prometheus.MustRegister(m.MinedCoins)
 	prometheus.MustRegister(m.SpentCoins)
 	prometheus.MustRegister(m.LostCoins)
 	prometheus.MustRegister(m.StolenCoins)
+	prometheus.MustRegister(m.CoolDown)
 	return m
 }

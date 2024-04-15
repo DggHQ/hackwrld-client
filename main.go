@@ -38,7 +38,7 @@ var (
 
 // Handle state endpoint
 func state(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"state": commandCenter.State})
+	c.JSON(http.StatusOK, gin.H{"state": commandCenter.GetState().State})
 }
 
 // Handle miner upgrade endpoint
@@ -193,6 +193,8 @@ func main() {
 	go commandCenter.ReplyScan(nc)
 	// Listen to steal events on client
 	go commandCenter.ReplySteal(nc)
+	// Update cooldown value in goroutine
+	go commandCenter.UpdateCoolDown()
 
 	router := gin.Default()
 	router.POST("/upgrade/miner", minerupgrade)

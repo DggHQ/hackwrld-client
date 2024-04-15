@@ -42,6 +42,9 @@ type State struct {
 	Stealer struct {
 		Level float32 `json:"level"`
 	} `json:"stealer"`
+	CoolDown struct {
+		Time time.Duration `json:"time"`
+	} `json:"cooldown"`
 }
 
 // UpgradeReply struct
@@ -135,7 +138,7 @@ func (c *CommandCenter) GetValue(key string) []byte {
 	}
 }
 
-// Put valie to etcd3
+// Put value to etcd3
 func (c *CommandCenter) PutValue(key string, value string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	_, err := c.EtcdClient.Put(ctx, key, value)
@@ -530,6 +533,20 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 	}
 
 	return stealReply, "successful steal operation", nil
+}
+
+// Periodically update the ticker
+func (c *CommandCenter) UpdateCoolDown() {
+	ticker := time.NewTicker(1 * time.Second)
+	for range ticker.C {
+		if c.StealData.AttackInterval/time.Second-(time.Since(c.StealData.LastAttackTime)/time.Second) > 0 {
+			c.State.CoolDown.Time = c.StealData.AttackInterval/time.Second - (time.Since(c.StealData.LastAttackTime) / time.Second)
+			monitor.CoolDown.WithLabelValues(c.ID).Set(float64(c.State.CoolDown.Time))
+		} else {
+			c.State.CoolDown.Time = 0
+			monitor.CoolDown.WithLabelValues(c.ID).Set(float64(c.State.CoolDown.Time))
+		}
+	}
 }
 
 // Get state of CommandCenter
