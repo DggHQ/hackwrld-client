@@ -90,6 +90,7 @@ func getEnvToArray(key, defaultValue string) []string {
 }
 
 func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
+	log.Printf("Starting command center for %s", getEnv("NICK", "DEBUGPLAYER"))
 	// Configure commandCenter State
 	c.ID = getEnv("ID", "123456")
 	c.Nick = getEnv("NICK", "DEBUGPLAYER")
