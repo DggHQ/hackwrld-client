@@ -371,10 +371,17 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 		if c.ID == foreignCommandCenter.ID {
 			return
 		} else {
-
 			// If the command center is foreign and their scanner level is higher than this firewall level, allow scan
 			if foreignCommandCenter.Scanner.Level > c.State.Firewall.Level {
 				jsonReply, err := json.Marshal(c.State)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				m.Respond(jsonReply)
+			} else {
+				// Level is lower. Reply but with empty data
+				emptyState := State{ID: c.ID, Nick: c.Nick}
+				jsonReply, err := json.Marshal(emptyState)
 				if err != nil {
 					log.Fatalln(err)
 				}
