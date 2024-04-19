@@ -48,13 +48,10 @@ type State struct {
 	CoolDown struct {
 		Time time.Duration `json:"time"`
 	} `json:"cooldown"`
-	LastSteals []StealData `json:"lastSteals"`
-}
-
-// Hold data pertaining to last stealer
-type StealData struct {
-	Nick   string  `json:"nick"`
-	Amount float32 `json:"amount"`
+	LastSteals []struct {
+		Nick   string  `json:"nick"`
+		Amount float32 `json:"amount"`
+	} `json:"lastSteals"`
 }
 
 // UpgradeReply struct
@@ -99,16 +96,18 @@ func getEnvToArray(key, defaultValue string) []string {
 // Update StealList of State
 // This will show the last 50 steals in the state
 func (c *CommandCenter) UpdateStealList(stealerName string, stolenAmount float32) {
-	steal := StealData{
-		Nick:   stealerName,
-		Amount: stolenAmount,
-	}
 	// Remove oldest element of slice of there are greater or equal steals in state
 	if len(c.State.LastSteals) >= 50 {
 		c.State.LastSteals = c.State.LastSteals[1:]
 	}
 	// Append the steal to the state
-	c.State.LastSteals = append(c.State.LastSteals, steal)
+	c.State.LastSteals = append(c.State.LastSteals, struct {
+		Nick   string  "json:\"nick\""
+		Amount float32 "json:\"amount\""
+	}{
+		Nick:   stealerName,
+		Amount: stolenAmount,
+	})
 }
 
 // Set Steal Cooldown
