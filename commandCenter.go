@@ -48,6 +48,13 @@ type State struct {
 	CoolDown struct {
 		Time time.Duration `json:"time"`
 	} `json:"cooldown"`
+	LastSteals []StealData `json:"lastSteals"`
+}
+
+// Hold data pertaining to last stealer
+type StealData struct {
+	Nick   string  `json:"nick"`
+	Amount float32 `json:"amount"`
 }
 
 // UpgradeReply struct
@@ -89,6 +96,32 @@ func getEnvToArray(key, defaultValue string) []string {
 	return strings.Split(value, ";")
 }
 
+// Update StealList of State
+// This will show the last 50 steals in the state
+func (c *CommandCenter) UpdateStealList(stealerName string, stolenAmount float32) {
+	steal := StealData{
+		Nick:   stealerName,
+		Amount: stolenAmount,
+	}
+	// Remove oldest element of slice of there are greater or equal steals in state
+	if len(c.State.LastSteals) >= 50 {
+		c.State.LastSteals = c.State.LastSteals[1:]
+	}
+	// Append the steal to the state
+	c.State.LastSteals = append(c.State.LastSteals, steal)
+}
+
+// Set Steal Cooldown
+// Cap the cooldown to 24 hours max
+func (c *CommandCenter) SetCooldown(levelDifference int) {
+	attackCooldown := 5 + levelDifference
+	if time.Minute*time.Duration(attackCooldown) > time.Hour*time.Duration(24) {
+		c.StealData.AttackInterval = time.Hour * time.Duration(24)
+	} else {
+		c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
+	}
+}
+
 func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	log.Printf("Starting command center for %s", getEnv("NICK", "DEBUGPLAYER"))
 	// Configure commandCenter State
@@ -105,6 +138,7 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	// Configure starting attack interval
 	c.StealData.AttackInterval = time.Minute * 5
 	c.State.Funds.RWMutex = &sync.RWMutex{}
+	c.State.LastSteals = []StealData{}
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
@@ -450,8 +484,8 @@ func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 // This will not reply when the incoming command center id is the same as the current instance
 // When the foreign command center stealer level has a higher level than this command center's firewall, reply
 func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
-	if _, err := nc.Subscribe(fmt.Sprintf("commandcenter.%s.stealEndpoint", c.ID), func(m *nats.Msg) {
-		log.Println("Incoming steal event.")
+	// QueueSubscribe as sole listener on topic. This way requests will be sequentially worked through.
+	if _, err := nc.QueueSubscribe(fmt.Sprintf("commandcenter.%s.stealEndpoint", c.ID), c.ID, func(m *nats.Msg) {
 		// Initialize CommandCenter struct
 		foreignCommandCenter := State{}
 		// Load received values
@@ -533,8 +567,11 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				// The greater the level difference between attacker and defender the greater the cooldown the defender will receive, protecting them for longer.
 				// Default will always be 5 minutes + level difference
 				// Attacking weaker players will protect them for a long time, allowing them to catch up again.
-				attackCooldown := 5 + lvldiff
-				c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
+
+				// attackCooldown := 5 + lvldiff
+				// c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
+				// Set the cooldown for new steals. Capped at 24 hours max.
+				c.SetCooldown(lvldiff)
 				// Level of stealer is higher
 
 				// Current Funds = 5.11
@@ -573,6 +610,8 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 					}
 				}
 				c.State.Funds.Unlock()
+				// Add stolen amount to personal steal archival list
+				c.UpdateStealList(foreignCommandCenter.Nick, coincache)
 				monitor.LostCoins.WithLabelValues(c.ID, c.Nick, foreignCommandCenter.ID, foreignCommandCenter.Nick).Add(float64(coincache))
 				// After successfully stealing from the target, send a reply to the attacker
 				stealReply := StealReply{
@@ -665,7 +704,8 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 // Periodically update the ticker
 func (c *CommandCenter) UpdateCoolDown() {
 	ticker := time.NewTicker(1 * time.Second)
-	for range ticker.C {
+	for {
+		<-ticker.C
 		if c.StealData.AttackInterval/time.Second-(time.Since(c.StealData.LastAttackTime)/time.Second) > 0 {
 			c.State.CoolDown.Time = c.StealData.AttackInterval/time.Second - (time.Since(c.StealData.LastAttackTime) / time.Second)
 			monitor.CoolDown.WithLabelValues(c.ID, c.Nick).Set(float64(c.State.CoolDown.Time))
