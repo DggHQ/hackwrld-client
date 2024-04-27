@@ -46,7 +46,8 @@ type State struct {
 		Level float32 `json:"level"`
 	} `json:"stealer"`
 	CoolDown struct {
-		Time time.Duration `json:"time"`
+		Time                time.Duration `json:"time"`
+		ExpirationTimeStamp int64         `json:"expirationTimestamp"`
 	} `json:"cooldown"`
 	LastSteals []StealData `json:"lastSteals"`
 }
@@ -121,6 +122,7 @@ func (c *CommandCenter) SetCooldown(levelDifference int) {
 	} else {
 		c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
 	}
+	c.State.CoolDown.ExpirationTimeStamp = int64(time.Now().Add(c.StealData.AttackInterval).Unix())
 }
 
 func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
