@@ -38,7 +38,21 @@ func state(c *gin.Context) {
 
 // Handle miner upgrade endpoint
 func minerupgrade(c *gin.Context) {
-	success, commandCenter, reply, err := commandCenter.UpgradeCryptoMiner(nc)
+	success, commandCenter, reply, err := commandCenter.UpgradeCryptoMiner(nc, false)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
+}
+
+// Handle miner upgrade endpoint
+func minerupgrademax(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeCryptoMiner(nc, true)
 	if err != nil {
 		log.Fatalln(err)
 		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
@@ -52,7 +66,21 @@ func minerupgrade(c *gin.Context) {
 
 // Handle scanner upgrade endpoint
 func scannerupgrade(c *gin.Context) {
-	success, commandCenter, reply, err := commandCenter.UpgradeScanner(nc)
+	success, commandCenter, reply, err := commandCenter.UpgradeScanner(nc, false)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
+}
+
+// Handle scanner upgrade endpoint
+func scannerupgrademax(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeScanner(nc, true)
 	if err != nil {
 		log.Fatalln(err)
 		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
@@ -66,7 +94,21 @@ func scannerupgrade(c *gin.Context) {
 
 // Handle firewall upgrade endpoint
 func firewallupgrade(c *gin.Context) {
-	success, commandCenter, reply, err := commandCenter.UpgradeFirewall(nc)
+	success, commandCenter, reply, err := commandCenter.UpgradeFirewall(nc, false)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
+}
+
+// Handle firewall upgrade endpoint
+func firewallupgrademax(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeFirewall(nc, true)
 	if err != nil {
 		log.Fatalln(err)
 		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
@@ -80,7 +122,21 @@ func firewallupgrade(c *gin.Context) {
 
 // Handle stealer upgrade endpoint
 func stealerupgrade(c *gin.Context) {
-	success, commandCenter, reply, err := commandCenter.UpgradeStealer(nc)
+	success, commandCenter, reply, err := commandCenter.UpgradeStealer(nc, false)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
+}
+
+// Handle stealer upgrade endpoint
+func stealerupgrademax(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeStealer(nc, true)
 	if err != nil {
 		log.Fatalln(err)
 		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
@@ -160,9 +216,13 @@ func main() {
 
 	router := gin.Default()
 	router.POST("/upgrade/miner", minerupgrade)
+	router.POST("/upgrade/miner/max", minerupgrademax)
 	router.POST("/upgrade/scanner", scannerupgrade)
+	router.POST("/upgrade/scanner/max", scannerupgrademax)
 	router.POST("/upgrade/firewall", firewallupgrade)
+	router.POST("/upgrade/firewall/max", firewallupgrademax)
 	router.POST("/upgrade/stealer", stealerupgrade)
+	router.POST("/upgrade/stealer/max", stealerupgrademax)
 	router.POST("/attack/out", func(ctx *gin.Context) {})
 	router.POST("/scan/out", scanout)
 	router.POST("/steal", steal)

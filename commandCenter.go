@@ -46,7 +46,8 @@ type State struct {
 		Level float32 `json:"level"`
 	} `json:"stealer"`
 	CoolDown struct {
-		Time time.Duration `json:"time"`
+		Time                time.Duration `json:"time"`
+		ExpirationTimeStamp int64         `json:"expirationTimestamp"`
 	} `json:"cooldown"`
 	LastSteals []StealData `json:"lastSteals"`
 }
@@ -59,8 +60,9 @@ type StealData struct {
 
 // UpgradeReply struct
 type UpgradeReply struct {
-	Allow bool    `json:"success"`
-	Cost  float32 `json:"cost"`
+	Allow  bool    `json:"success"`
+	Cost   float32 `json:"cost"`
+	Levels float32 `json:"levels"`
 }
 
 // StealReply struct
@@ -120,6 +122,7 @@ func (c *CommandCenter) SetCooldown(levelDifference int) {
 	} else {
 		c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
 	}
+	c.State.CoolDown.ExpirationTimeStamp = int64(time.Now().Add(c.StealData.AttackInterval).Unix())
 }
 
 func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
@@ -270,7 +273,7 @@ func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 }
 
 // UpgradeStealer on CommandCenter
-func (c *CommandCenter) UpgradeStealer(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
+func (c *CommandCenter) UpgradeStealer(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
 	c.State.Funds.Lock()
 	defer c.State.Funds.Unlock()
@@ -279,7 +282,12 @@ func (c *CommandCenter) UpgradeStealer(nc *nats.Conn) (bool, *CommandCenter, Upg
 		log.Fatalln(err)
 		return false, c, reply, err
 	}
-	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeStealer", c.ID), []byte(state), time.Second)
+	var msg *nats.Msg
+	if upgradeToMax {
+		msg, err = nc.Request(fmt.Sprintf("commandcenter.%s.upgradeStealer.max", c.ID), []byte(state), time.Second)
+	} else {
+		msg, err = nc.Request(fmt.Sprintf("commandcenter.%s.upgradeStealer", c.ID), []byte(state), time.Second)
+	}
 	if err != nil {
 		log.Fatalln(err)
 		return false, c, reply, err
@@ -293,14 +301,14 @@ func (c *CommandCenter) UpgradeStealer(nc *nats.Conn) (bool, *CommandCenter, Upg
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(reply.Cost))
-		c.State.Stealer.Level++
+		c.State.Stealer.Level += reply.Levels
 		return true, c, reply, err
 	}
 	return false, c, reply, err
 }
 
 // UpgradeFirewall on CommandCenter
-func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
+func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
 	c.State.Funds.Lock()
 	defer c.State.Funds.Unlock()
@@ -309,7 +317,12 @@ func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn) (bool, *CommandCenter, Up
 		log.Fatalln(err)
 		return false, c, reply, err
 	}
-	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeFirewall", c.ID), []byte(state), time.Second)
+	var msg *nats.Msg
+	if upgradeToMax {
+		msg, err = nc.Request(fmt.Sprintf("commandcenter.%s.upgradeFirewall.max", c.ID), []byte(state), time.Second)
+	} else {
+		msg, err = nc.Request(fmt.Sprintf("commandcenter.%s.upgradeFirewall", c.ID), []byte(state), time.Second)
+	}
 	if err != nil {
 		log.Fatalln(err)
 		return false, c, reply, err
@@ -323,14 +336,14 @@ func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn) (bool, *CommandCenter, Up
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(reply.Cost))
-		c.State.Firewall.Level++
+		c.State.Firewall.Level += reply.Levels
 		return true, c, reply, err
 	}
 	return false, c, reply, err
 }
 
 // UpgradeScanner on CommandCenter
-func (c *CommandCenter) UpgradeScanner(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
+func (c *CommandCenter) UpgradeScanner(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
 	c.State.Funds.Lock()
 	defer c.State.Funds.Unlock()
@@ -339,7 +352,12 @@ func (c *CommandCenter) UpgradeScanner(nc *nats.Conn) (bool, *CommandCenter, Upg
 		log.Fatalln(err)
 		return false, c, reply, err
 	}
-	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeScanner", c.ID), []byte(state), time.Second)
+	var msg *nats.Msg
+	if upgradeToMax {
+		msg, err = nc.Request(fmt.Sprintf("commandcenter.%s.upgradeScanner.max", c.ID), []byte(state), time.Second)
+	} else {
+		msg, err = nc.Request(fmt.Sprintf("commandcenter.%s.upgradeScanner", c.ID), []byte(state), time.Second)
+	}
 	if err != nil {
 		log.Fatalln(err)
 		return false, c, reply, err
@@ -353,14 +371,14 @@ func (c *CommandCenter) UpgradeScanner(nc *nats.Conn) (bool, *CommandCenter, Upg
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(reply.Cost))
-		c.State.Scanner.Level++
+		c.State.Scanner.Level += reply.Levels
 		return true, c, reply, err
 	}
 	return false, c, reply, nil
 }
 
 // UpgradeCryptoMiner on CommandCenter
-func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn) (bool, *CommandCenter, UpgradeReply, error) {
+func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
 	c.State.Funds.Lock()
 	defer c.State.Funds.Unlock()
@@ -369,7 +387,12 @@ func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn) (bool, *CommandCenter,
 		log.Fatalln(err)
 		return false, c, reply, err
 	}
-	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeMiner", c.ID), []byte(state), time.Second)
+	var msg *nats.Msg
+	if upgradeToMax {
+		msg, err = nc.Request(fmt.Sprintf("commandcenter.%s.upgradeMiner.max", c.ID), []byte(state), time.Second)
+	} else {
+		msg, err = nc.Request(fmt.Sprintf("commandcenter.%s.upgradeMiner", c.ID), []byte(state), time.Second)
+	}
 	if err != nil {
 		log.Fatalln(err)
 		return false, c, reply, err
@@ -383,7 +406,7 @@ func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn) (bool, *CommandCenter,
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(reply.Cost))
-		c.State.CryptoMiner.Level++
+		c.State.CryptoMiner.Level += reply.Levels
 		return true, c, reply, nil
 	}
 	return false, c, reply, nil
