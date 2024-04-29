@@ -206,8 +206,6 @@ func main() {
 	go commandCenter.ReplyScan(nc)
 	// Listen to steal events on client
 	go commandCenter.ReplySteal(nc)
-	// Update cooldown value in goroutine
-	go commandCenter.UpdateCoolDown()
 	// Run task to continuosly save state each minute.
 	// This is done to reduce load on the storage backend.
 	go commandCenter.SaveStateContinuous()
