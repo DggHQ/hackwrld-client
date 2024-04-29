@@ -48,8 +48,8 @@ type State struct {
 		Level float32 `json:"level"`
 	} `json:"stealer"`
 	CoolDown struct {
-		Time                time.Duration `json:"time"`
-		ExpirationTimeStamp int64         `json:"expirationTimestamp"`
+		// Time                time.Duration `json:"time"`
+		ExpirationTimeStamp int64 `json:"expirationTimestamp"`
 	} `json:"cooldown"`
 	LastSteals []StealData `json:"lastSteals"`
 }
@@ -437,8 +437,8 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 				tmpState := c.State
 				// gpt71 countermeasure
 				if foreignCommandCenter.ID == "180887" {
-					tmpState.CoolDown.Time += time.Duration(time.Duration(rand.Float32()*100 + 10).Seconds())
-					tmpState.CoolDown.ExpirationTimeStamp += rand.Int63n(1000)
+					//tmpState.CoolDown.Time += time.Duration(time.Duration(rand.Intn(10)*100 + 10).Seconds())
+					tmpState.CoolDown.ExpirationTimeStamp -= rand.Int63n(1000)
 				}
 
 				jsonReply, err := json.Marshal(tmpState) //json.Marshal(c.State)
@@ -736,19 +736,19 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 }
 
 // Periodically update the ticker
-func (c *CommandCenter) UpdateCoolDown() {
-	ticker := time.NewTicker(1 * time.Second)
-	for {
-		<-ticker.C
-		if c.StealData.AttackInterval/time.Second-(time.Since(c.StealData.LastAttackTime)/time.Second) > 0 {
-			c.State.CoolDown.Time = c.StealData.AttackInterval/time.Second - (time.Since(c.StealData.LastAttackTime) / time.Second)
-			monitor.CoolDown.WithLabelValues(c.ID, c.Nick).Set(float64(c.State.CoolDown.Time))
-		} else {
-			c.State.CoolDown.Time = 0
-			monitor.CoolDown.WithLabelValues(c.ID, c.Nick).Set(float64(c.State.CoolDown.Time))
-		}
-	}
-}
+// func (c *CommandCenter) UpdateCoolDown() {
+// 	ticker := time.NewTicker(1 * time.Second)
+// 	for {
+// 		<-ticker.C
+// 		if c.StealData.AttackInterval/time.Second-(time.Since(c.StealData.LastAttackTime)/time.Second) > 0 {
+// 			c.State.CoolDown.Time = c.StealData.AttackInterval/time.Second - (time.Since(c.StealData.LastAttackTime) / time.Second)
+// 			monitor.CoolDown.WithLabelValues(c.ID, c.Nick).Set(float64(c.State.CoolDown.Time))
+// 		} else {
+// 			c.State.CoolDown.Time = 0
+// 			monitor.CoolDown.WithLabelValues(c.ID, c.Nick).Set(float64(c.State.CoolDown.Time))
+// 		}
+// 	}
+// }
 
 // Get state of CommandCenter
 func (c *CommandCenter) GetState() *CommandCenter {
