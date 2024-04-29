@@ -1,3 +1,22 @@
+# 1.1
+
+## Additions
+
+- [MECHANICS] Vault: The Vault allows you to store (for a 10% fee) all of your current funds. You can then later withdraw your funds to pay for upgrades. The Vault cannot be stolen from. The Funds in the Vault cannot be used to buy upgrades. They are frozen until withdrawn.
+
+# 1.0.3
+
+## Additions
+
+- [MECHANICS] "Buy Max" option is now available per component
+
+
+# 1.0.2
+
+## Additions
+
+- [MECHANICS] State now stores a list of the 50 last people who stole from you.
+
 # 1.0.1
 
 ## Changes
