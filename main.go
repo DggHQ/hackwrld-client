@@ -159,6 +159,18 @@ func scanout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "scans": scans, "message": msg})
 }
 
+// Handle storing coins in vault
+func storevault(c *gin.Context) {
+	transferAmount := commandCenter.StoreVault()
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Transferred %f to vault", transferAmount)})
+}
+
+// Handle withdrawing coins in vault
+func withdrawvault(c *gin.Context) {
+	transferAmount := commandCenter.WithdrawVault()
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Transferred %f to vault", transferAmount)})
+}
+
 // Handle steal event
 func steal(c *gin.Context) {
 	var data StealRequest
@@ -221,6 +233,8 @@ func main() {
 	router.POST("/upgrade/firewall/max", firewallupgrademax)
 	router.POST("/upgrade/stealer", stealerupgrade)
 	router.POST("/upgrade/stealer/max", stealerupgrademax)
+	router.POST("/vault/store", storevault)
+	router.POST("/vault/withdraw", withdrawvault)
 	router.POST("/attack/out", func(ctx *gin.Context) {})
 	router.POST("/scan/out", scanout)
 	router.POST("/steal", steal)

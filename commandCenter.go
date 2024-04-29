@@ -35,6 +35,10 @@ type State struct {
 		Amount float32 `json:"amount"`
 		*sync.RWMutex
 	} `json:"funds"`
+	Vault struct {
+		Amount float32 `json:"amount"`
+		*sync.RWMutex
+	} `json:"vault"`
 	Firewall struct {
 		Level float32 `json:"level"`
 	} `json:"firewall"`
@@ -143,6 +147,7 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	// Configure starting attack interval
 	c.StealData.AttackInterval = time.Minute * 5
 	c.State.Funds.RWMutex = &sync.RWMutex{}
+	c.State.Vault.RWMutex = &sync.RWMutex{}
 	c.State.LastSteals = []StealData{}
 
 	// Init etcd client
@@ -175,6 +180,33 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	}
 	// Check for existing state now
 	return *c
+}
+
+// Store coins in vault
+func (c *CommandCenter) StoreVault() float32 {
+	c.State.Vault.Lock()
+	c.State.Funds.Lock()
+	defer c.State.Vault.Unlock()
+	defer c.State.Funds.Unlock()
+	// Transfer 90% of Funds to Vault (a 10% fee to secure coins)
+	transferAmount := 0.9 * c.State.Funds.Amount
+	c.State.Vault.Amount += transferAmount
+	// Empty the Funds
+	c.State.Funds.Amount = 0
+	return transferAmount
+}
+
+// Store coins in vault
+func (c *CommandCenter) WithdrawVault() float32 {
+	c.State.Vault.Lock()
+	c.State.Funds.Lock()
+	defer c.State.Vault.Unlock()
+	defer c.State.Funds.Unlock()
+	// Withdraw all coins from vault and set vault amount to 0
+	transferAmount := c.State.Vault.Amount
+	c.State.Funds.Amount += transferAmount
+	c.State.Vault.Amount = 0
+	return transferAmount
 }
 
 // Get value from etcd3
