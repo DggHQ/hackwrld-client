@@ -21,6 +21,7 @@ type CommandCenter struct {
 	EtcdClient *clientv3.Client
 	ID         string
 	Nick       string
+	Team       string
 	StealData  struct {
 		LastAttackTime time.Time
 		AttackInterval time.Duration
@@ -31,6 +32,7 @@ type CommandCenter struct {
 type State struct {
 	ID    string `json:"id"`
 	Nick  string `json:"nick"`
+	Team  string `json:"team"`
 	Funds struct {
 		Amount float32 `json:"amount"`
 		*sync.RWMutex
@@ -136,8 +138,10 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	// Configure commandCenter State
 	c.ID = getEnv("ID", "123456")
 	c.Nick = getEnv("NICK", "DEBUGPLAYER")
+	c.Team = getEnv("TEAM", "none")
 	c.State.ID = c.ID
 	c.State.Nick = c.Nick
+	c.State.Team = c.Team
 	c.State.CryptoMiner.Level = 1
 	c.State.Scanner.Level = 1
 	c.State.Firewall.Level = 1
@@ -301,7 +305,7 @@ func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 		c.State.Funds.Lock()
 		c.State.Funds.Amount += baseMineRate * float32(minerLevel)
 		c.State.Funds.Unlock()
-		monitor.MinedCoins.WithLabelValues(c.ID, c.Nick).Add(float64(baseMineRate * float32(minerLevel)))
+		monitor.MinedCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(baseMineRate * float32(minerLevel)))
 		time.Sleep(time.Second * 1)
 	}
 }
@@ -334,7 +338,7 @@ func (c *CommandCenter) UpgradeStealer(nc *nats.Conn, upgradeToMax bool) (bool, 
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
-		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(reply.Cost))
+		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.Stealer.Level += reply.Levels
 		return true, c, reply, err
 	}
@@ -369,7 +373,7 @@ func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn, upgradeToMax bool) (bool,
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
-		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(reply.Cost))
+		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.Firewall.Level += reply.Levels
 		return true, c, reply, err
 	}
@@ -404,7 +408,7 @@ func (c *CommandCenter) UpgradeScanner(nc *nats.Conn, upgradeToMax bool) (bool, 
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
-		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(reply.Cost))
+		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.Scanner.Level += reply.Levels
 		return true, c, reply, err
 	}
@@ -439,7 +443,7 @@ func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn, upgradeToMax bool) (bo
 	}
 	if reply.Allow {
 		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
-		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(reply.Cost))
+		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.CryptoMiner.Level += reply.Levels
 		return true, c, reply, nil
 	}
@@ -508,7 +512,7 @@ func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 		return nil, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
 	} else {
 		c.State.Funds.Amount = c.State.Funds.Amount - cost
-		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(cost))
+		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
 	}
 
 	var states = []State{}
@@ -678,7 +682,7 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				c.State.Funds.Unlock()
 				// Add stolen amount to personal steal archival list
 				c.UpdateStealList(foreignCommandCenter.Nick, coincache)
-				monitor.LostCoins.WithLabelValues(c.ID, c.Nick, foreignCommandCenter.ID, foreignCommandCenter.Nick).Add(float64(coincache))
+				monitor.LostCoins.WithLabelValues(c.ID, c.Nick, foreignCommandCenter.ID, foreignCommandCenter.Nick, foreignCommandCenter.Team).Add(float64(coincache))
 				// After successfully stealing from the target, send a reply to the attacker
 				stealReply := StealReply{
 					Attacker: struct {
@@ -725,7 +729,7 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 		return stealReply, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
 	} else {
 		c.State.Funds.Amount = c.State.Funds.Amount - cost
-		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick).Add(float64(cost))
+		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
 	}
 	state, err := json.Marshal(&c.State)
 	if err != nil {
@@ -757,7 +761,7 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 	sub.Unsubscribe()
 	// Add coins to account. If no coins are gained, then nothing will be added.
 	c.State.Funds.Amount += stealReply.GainedCoins
-	monitor.StolenCoins.WithLabelValues(c.ID, c.Nick).Add(float64(stealReply.GainedCoins))
+	monitor.StolenCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(stealReply.GainedCoins))
 	// Return reply with error on cooldown
 	if stealReply.CoolDown {
 		err := fmt.Errorf("target is on cooldown")
