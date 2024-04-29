@@ -162,13 +162,13 @@ func scanout(c *gin.Context) {
 // Handle storing coins in vault
 func storevault(c *gin.Context) {
 	transferAmount := commandCenter.StoreVault()
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Transferred %f to vault", transferAmount)})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Transferred %f to vault.", transferAmount)})
 }
 
 // Handle withdrawing coins in vault
 func withdrawvault(c *gin.Context) {
 	transferAmount := commandCenter.WithdrawVault()
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Transferred %f to vault", transferAmount)})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Withdrew %f from vault.", transferAmount)})
 }
 
 // Handle steal event
