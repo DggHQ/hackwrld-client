@@ -122,14 +122,15 @@ func (c *CommandCenter) UpdateStealList(stealerName string, stolenAmount float32
 }
 
 // Set Steal Cooldown
-// Cap the cooldown to 24 hours max
-func (c *CommandCenter) SetCooldown(levelDifference int) {
-	attackCooldown := 5 + levelDifference
-	if time.Minute*time.Duration(attackCooldown) > time.Hour*time.Duration(24) {
-		c.StealData.AttackInterval = time.Hour * time.Duration(24)
-	} else {
-		c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
-	}
+// Set to a fixed time of 10 Minutes after a steal
+func (c *CommandCenter) SetCooldown() {
+	// attackCooldown := 5 + levelDifference
+	// if time.Minute*time.Duration(attackCooldown) > time.Hour*time.Duration(24) {
+	// 	c.StealData.AttackInterval = time.Hour * time.Duration(24)
+	// } else {
+	// 	c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
+	// }
+	c.StealData.AttackInterval = time.Minute * 10
 	c.State.CoolDown.ExpirationTimeStamp = int64(time.Now().Add(c.StealData.AttackInterval).Unix())
 }
 
@@ -641,7 +642,8 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				// attackCooldown := 5 + lvldiff
 				// c.StealData.AttackInterval = time.Minute * time.Duration(attackCooldown)
 				// Set the cooldown for new steals. Capped at 24 hours max.
-				c.SetCooldown(lvldiff)
+				// UPDATE: 2024-04-30: Set to a fixed 10 minutes to allow for a more dynamic gameplay
+				c.SetCooldown()
 				// Level of stealer is higher
 
 				// Current Funds = 5.11
@@ -651,7 +653,7 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				// Do not remove targetfunds if that would mean sinking below 0
 
 				// Create a fixed size array based on the level difference
-				stealAttempts := make([]float32, lvldiff)
+				stealAttempts := make([]int, lvldiff)
 				// Create a coin cache
 				var coincache float32
 				// Dyncamically determine amount to steal per attempt by level.
@@ -659,8 +661,7 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				log.Printf("Coins are being stolen! %f per attempt!", stealAmount)
 				// Try to steal money on each iteration. Logic is described on top.
 				c.State.Funds.Lock()
-				for i := range stealAttempts {
-					stealAttempts[i] = float32(i)
+				for range stealAttempts {
 					//  futureFunds := c.State.Funds.Amount - stealAmount; futureFunds > c.State.Funds.Amount
 					if c.State.Funds.Amount-stealAmount <= 0 {
 						// Player loses no money because firewall level changed mid loop.

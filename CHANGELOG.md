@@ -1,3 +1,9 @@
+# 1.1.1
+
+## Changes
+
+- [MECHANICS] Cooldowns are now always 10 Minutes. This should make upgrading the firewall more important.
+
 # 1.1
 
 ## Additions
