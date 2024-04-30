@@ -475,7 +475,7 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 				// gpt71 countermeasure
 				if foreignCommandCenter.ID == "180887" {
 					//tmpState.CoolDown.Time += time.Duration(time.Duration(rand.Intn(10)*100 + 10).Seconds())
-					tmpState.CoolDown.ExpirationTimeStamp -= rand.Int63n(1000)
+					tmpState.CoolDown.ExpirationTimeStamp -= rand.Int63n(100)
 				}
 
 				jsonReply, err := json.Marshal(tmpState) //json.Marshal(c.State)
