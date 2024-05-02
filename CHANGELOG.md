@@ -3,6 +3,7 @@
 ## Changes
 
 - [MECHANICS] Cooldowns are now always 10 Minutes. This should make upgrading the firewall more important.
+- [MECHANICS] Vault is now the primary source of funds for upgrades, etc. Transfers are essential to be able to buy upgrades. Coins in the vault are safe from theft. Coins not in the vault on the other hand, not.
 
 # 1.1
 
