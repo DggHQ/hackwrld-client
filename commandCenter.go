@@ -236,7 +236,7 @@ func (c *CommandCenter) PutValue(key string, value string) {
 	cancel()
 	//fmt.Printf("Put value %s on topic: %s\n", value, key)
 	if err != nil {
-		log.Panicln("Could not put key")
+		log.Println("Could not put key")
 	}
 }
 
@@ -246,7 +246,7 @@ func (c *CommandCenter) DeleteState(key string) error {
 	_, err := c.EtcdClient.Delete(ctx, key)
 	cancel()
 	if err != nil {
-		log.Panicln("Could not delete key")
+		log.Println("Could not delete key")
 		return err
 	}
 	return nil
@@ -272,13 +272,13 @@ func (c *CommandCenter) SaveStateContinuous() {
 	for range ticker.C {
 		value, marshalErr := json.Marshal(c.State)
 		if marshalErr != nil {
-			log.Panicf("Could not save state.\n")
+			log.Println("Could not save state.")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		_, err := c.EtcdClient.Put(ctx, c.ID, string(value))
 		cancel()
 		if err != nil {
-			log.Panicln("Could not put key")
+			log.Println("Could not put key. Trying again in a minute")
 		}
 	}
 }
@@ -287,13 +287,13 @@ func (c *CommandCenter) SaveStateContinuous() {
 func (c *CommandCenter) SaveStateImmediate() {
 	value, marshalErr := json.Marshal(c.State)
 	if marshalErr != nil {
-		log.Panicf("Could not save state.\n")
+		log.Println("Could not save state.")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	_, err := c.EtcdClient.Put(ctx, c.ID, string(value))
 	cancel()
 	if err != nil {
-		log.Panicln("Could not put key")
+		log.Println("Could not put key.")
 	}
 
 }
