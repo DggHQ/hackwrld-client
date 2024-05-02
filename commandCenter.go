@@ -38,7 +38,9 @@ type State struct {
 		*sync.RWMutex
 	} `json:"funds"`
 	Vault struct {
-		Amount float32 `json:"amount"`
+		Amount   float32 `json:"amount"`
+		Level    float32 `json:"level"`
+		Capacity float32 `json:"capacity"`
 		*sync.RWMutex
 	} `json:"vault"`
 	Firewall struct {
@@ -311,11 +313,42 @@ func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 	}
 }
 
+// UpgradeVault on CommandCenter this will not have a max buy option since the vault upgrade costs as much as its capacity
+func (c *CommandCenter) UpgradeVault(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
+	reply := UpgradeReply{}
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
+	state, err := json.Marshal(&c.State)
+	if err != nil {
+		log.Fatalln(err)
+		return false, c, reply, err
+	}
+	msg, err := nc.Request(fmt.Sprintf("commandcenter.%s.upgradeVault", c.ID), []byte(state), time.Second)
+	if err != nil {
+		log.Fatalln(err)
+		return false, c, reply, err
+	}
+	log.Printf("UpdateVault reply: %s", msg.Data)
+	jsonErr := json.Unmarshal(msg.Data, &reply)
+	if jsonErr != nil {
+		log.Fatalln(jsonErr)
+		return false, c, reply, err
+	}
+	if reply.Allow {
+		c.State.Vault.Amount = c.State.Vault.Amount - reply.Cost
+		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
+		c.State.Vault.Level += reply.Levels
+		c.State.Vault.Capacity += 10 * reply.Levels
+		return true, c, reply, err
+	}
+	return false, c, reply, err
+}
+
 // UpgradeStealer on CommandCenter
 func (c *CommandCenter) UpgradeStealer(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
-	c.State.Funds.Lock()
-	defer c.State.Funds.Unlock()
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
@@ -338,7 +371,7 @@ func (c *CommandCenter) UpgradeStealer(nc *nats.Conn, upgradeToMax bool) (bool, 
 		return false, c, reply, err
 	}
 	if reply.Allow {
-		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		c.State.Vault.Amount = c.State.Vault.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.Stealer.Level += reply.Levels
 		return true, c, reply, err
@@ -349,8 +382,8 @@ func (c *CommandCenter) UpgradeStealer(nc *nats.Conn, upgradeToMax bool) (bool, 
 // UpgradeFirewall on CommandCenter
 func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
-	c.State.Funds.Lock()
-	defer c.State.Funds.Unlock()
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
@@ -373,7 +406,7 @@ func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn, upgradeToMax bool) (bool,
 		return false, c, reply, err
 	}
 	if reply.Allow {
-		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		c.State.Vault.Amount = c.State.Vault.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.Firewall.Level += reply.Levels
 		return true, c, reply, err
@@ -384,8 +417,8 @@ func (c *CommandCenter) UpgradeFirewall(nc *nats.Conn, upgradeToMax bool) (bool,
 // UpgradeScanner on CommandCenter
 func (c *CommandCenter) UpgradeScanner(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
-	c.State.Funds.Lock()
-	defer c.State.Funds.Unlock()
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
@@ -408,7 +441,7 @@ func (c *CommandCenter) UpgradeScanner(nc *nats.Conn, upgradeToMax bool) (bool, 
 		return false, c, reply, err
 	}
 	if reply.Allow {
-		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		c.State.Vault.Amount = c.State.Vault.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.Scanner.Level += reply.Levels
 		return true, c, reply, err
@@ -419,8 +452,8 @@ func (c *CommandCenter) UpgradeScanner(nc *nats.Conn, upgradeToMax bool) (bool, 
 // UpgradeCryptoMiner on CommandCenter
 func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn, upgradeToMax bool) (bool, *CommandCenter, UpgradeReply, error) {
 	reply := UpgradeReply{}
-	c.State.Funds.Lock()
-	defer c.State.Funds.Unlock()
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
 	state, err := json.Marshal(&c.State)
 	if err != nil {
 		log.Fatalln(err)
@@ -443,7 +476,7 @@ func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn, upgradeToMax bool) (bo
 		return false, c, reply, err
 	}
 	if reply.Allow {
-		c.State.Funds.Amount = c.State.Funds.Amount - reply.Cost
+		c.State.Vault.Amount = c.State.Vault.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.CryptoMiner.Level += reply.Levels
 		return true, c, reply, nil
@@ -506,13 +539,13 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 func (c *CommandCenter) RequestScan(nc *nats.Conn) ([]State, string, error) {
 	// This costs money, so we remove coins based on the level of the scanner. First check if enough funds are available for scan.
 	cost := c.State.Scanner.Level * 0.1
-	c.State.Funds.Lock()
-	defer c.State.Funds.Unlock()
-	if cost > c.State.Funds.Amount {
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
+	if cost > c.State.Vault.Amount {
 		err := fmt.Errorf("not enough funds. cost: %f", cost)
 		return nil, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
 	} else {
-		c.State.Funds.Amount = c.State.Funds.Amount - cost
+		c.State.Vault.Amount = c.State.Vault.Amount - cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
 	}
 
@@ -721,15 +754,17 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 // Here we want to start a steal event. Compared to the scan, this only targets specific command centers by ID.
 func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealReply, string, error) {
 	var stealReply StealReply
+	c.State.Vault.Lock()
 	c.State.Funds.Lock()
+	defer c.State.Vault.Unlock()
 	defer c.State.Funds.Unlock()
 	// This costs money, so we remove coins based on the level of the stealer. First check if enough funds are available for scan.
 	cost := c.State.Stealer.Level * 0.1
-	if cost > c.State.Funds.Amount {
+	if cost > c.State.Vault.Amount {
 		err := fmt.Errorf("not enough funds. cost: %f", cost)
 		return stealReply, fmt.Sprintf("Not enough funds. Cost: %f", cost), err
 	} else {
-		c.State.Funds.Amount = c.State.Funds.Amount - cost
+		c.State.Vault.Amount = c.State.Vault.Amount - cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
 	}
 	state, err := json.Marshal(&c.State)
