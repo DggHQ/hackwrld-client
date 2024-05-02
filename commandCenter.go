@@ -155,6 +155,8 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.StealData.LastAttackTime = time.Now()
 	// Configure starting attack interval
 	c.StealData.AttackInterval = time.Minute * 5
+	// Set initial gui cooldown time
+	c.State.CoolDown.ExpirationTimeStamp = int64(time.Now().Add(c.StealData.AttackInterval).Unix())
 	c.State.Funds.RWMutex = &sync.RWMutex{}
 	c.State.Vault.RWMutex = &sync.RWMutex{}
 	c.State.LastSteals = []StealData{}
