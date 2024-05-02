@@ -701,7 +701,7 @@ func (c *CommandCenter) ReplySteal(nc *nats.Conn) error {
 				// Create a coin cache
 				var coincache float32
 				// Dyncamically determine amount to steal per attempt by level.
-				stealAmount := float32(0.01) * stealerLevel
+				stealAmount := float32(0.011) * stealerLevel
 				log.Printf("Coins are being stolen! %f per attempt!", stealAmount)
 				// Try to steal money on each iteration. Logic is described on top.
 				c.State.Funds.Lock()
