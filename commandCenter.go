@@ -149,6 +149,8 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Scanner.Level = 1
 	c.State.Firewall.Level = 1
 	c.State.Stealer.Level = 1
+	c.State.Vault.Level = 1
+	c.State.Vault.Capacity = 10
 	// Set initial protection period on boot
 	c.StealData.LastAttackTime = time.Now()
 	// Configure starting attack interval
@@ -195,8 +197,15 @@ func (c *CommandCenter) StoreVault() float32 {
 	c.State.Funds.Lock()
 	defer c.State.Vault.Unlock()
 	defer c.State.Funds.Unlock()
-	// Transfer 90% of Funds to Vault (a 10% fee to secure coins)
-	transferAmount := 0.9 * c.State.Funds.Amount
+	// Transfer money to vault but do not exceed the max capacity.
+	transferAmount := c.State.Funds.Amount
+	// Check if adding the current liquid funds would exceed the capacity of the vault.
+	if c.State.Vault.Amount+transferAmount > c.State.Vault.Capacity {
+		amountToAdd := c.State.Vault.Capacity - c.State.Vault.Amount
+		c.State.Vault.Amount = c.State.Vault.Capacity
+		c.State.Funds.Amount -= amountToAdd
+		return amountToAdd
+	}
 	c.State.Vault.Amount += transferAmount
 	// Empty the Funds
 	c.State.Funds.Amount = 0
@@ -806,21 +815,6 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 
 	return stealReply, "successful steal operation", nil
 }
-
-// Periodically update the ticker
-// func (c *CommandCenter) UpdateCoolDown() {
-// 	ticker := time.NewTicker(1 * time.Second)
-// 	for {
-// 		<-ticker.C
-// 		if c.StealData.AttackInterval/time.Second-(time.Since(c.StealData.LastAttackTime)/time.Second) > 0 {
-// 			c.State.CoolDown.Time = c.StealData.AttackInterval/time.Second - (time.Since(c.StealData.LastAttackTime) / time.Second)
-// 			monitor.CoolDown.WithLabelValues(c.ID, c.Nick).Set(float64(c.State.CoolDown.Time))
-// 		} else {
-// 			c.State.CoolDown.Time = 0
-// 			monitor.CoolDown.WithLabelValues(c.ID, c.Nick).Set(float64(c.State.CoolDown.Time))
-// 		}
-// 	}
-// }
 
 // Get state of CommandCenter
 func (c *CommandCenter) GetState() *CommandCenter {
