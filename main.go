@@ -159,6 +159,18 @@ func scanout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "scans": scans, "message": msg})
 }
 
+// Handle storing coins in vault
+func storevault(c *gin.Context) {
+	transferAmount := commandCenter.StoreVault()
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Transferred %f to vault.", transferAmount)})
+}
+
+// // Handle withdrawing coins in vault
+// func withdrawvault(c *gin.Context) {
+// 	transferAmount := commandCenter.WithdrawVault()
+// 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Withdrew %f from vault.", transferAmount)})
+// }
+
 // Handle steal event
 func steal(c *gin.Context) {
 	var data StealRequest
@@ -175,6 +187,20 @@ func steal(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "reply": reply, "message": msg})
+}
+
+// Handle vault upgrade endpoint
+func vaultupgrade(c *gin.Context) {
+	success, commandCenter, reply, err := commandCenter.UpgradeVault(nc, false)
+	if err != nil {
+		log.Fatalln(err)
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State, "reply": reply})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State, "reply": reply})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
 }
 
 //TODO: Subscribe to game master to get game settings
@@ -221,6 +247,9 @@ func main() {
 	router.POST("/upgrade/firewall/max", firewallupgrademax)
 	router.POST("/upgrade/stealer", stealerupgrade)
 	router.POST("/upgrade/stealer/max", stealerupgrademax)
+	router.POST("/vault/store", storevault)
+	router.POST("/upgrade/vault", vaultupgrade)
+	// router.POST("/vault/withdraw", withdrawvault)
 	router.POST("/attack/out", func(ctx *gin.Context) {})
 	router.POST("/scan/out", scanout)
 	router.POST("/steal", steal)

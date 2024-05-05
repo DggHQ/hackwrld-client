@@ -15,16 +15,16 @@ type Monitor struct {
 func (m *Monitor) Init() *Monitor {
 	m.MinedCoins = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "hackwrld_mined_coins",
-		Help: "Total amount of mined coins"}, []string{"id", "nick"})
+		Help: "Total amount of mined coins"}, []string{"id", "nick", "team"})
 	m.SpentCoins = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "hackwrld_spent_coins",
-		Help: "Total amount of spent coins"}, []string{"id", "nick"})
+		Help: "Total amount of spent coins"}, []string{"id", "nick", "team"})
 	m.LostCoins = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "hackwrld_lost_coins",
-		Help: "Total amount of coins lost to stealing"}, []string{"id", "nick", "stealerId", "stealerNick"})
+		Help: "Total amount of coins lost to stealing"}, []string{"id", "nick", "stealerId", "stealerNick", "stealerTeam"})
 	m.StolenCoins = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "hackwrld_stolen_coins",
-		Help: "Total amount of coins gained by stealing"}, []string{"id", "nick"})
+		Help: "Total amount of coins gained by stealing"}, []string{"id", "nick", "team"})
 	m.CoolDown = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "hackwrld_defender_cooldown",
 		Help: "The current cooldown time of the player"}, []string{"id", "nick"})
