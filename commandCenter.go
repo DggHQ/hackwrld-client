@@ -62,6 +62,15 @@ type State struct {
 	LastSteals []StealData `json:"lastSteals"`
 }
 
+type Inventory struct {
+	VaultMiner struct {
+		Name                string `json:"name"`
+		Amount              uint   `json:"amount"`
+		Enabled             bool   `json:"enabled"`
+		ExpirationTimeStamp int64  `json:"expirationTimestamp"`
+	} `json:"vaultMiner"`
+}
+
 // Hold data pertaining to last stealer
 type StealData struct {
 	Nick   string  `json:"nick"`
@@ -106,6 +115,11 @@ func getEnvToArray(key, defaultValue string) []string {
 		return strings.Split(defaultValue, ";")
 	}
 	return strings.Split(value, ";")
+}
+
+// Get the current player level
+func (c *CommandCenter) GetPlayerLevel() float32 {
+	return c.State.Stealer.Level + c.State.Firewall.Level + c.State.CryptoMiner.Level + c.State.Scanner.Level
 }
 
 // Update StealList of State
@@ -349,7 +363,7 @@ func (c *CommandCenter) UpgradeVault(nc *nats.Conn, upgradeToMax bool) (bool, *C
 		c.State.Vault.Amount = c.State.Vault.Amount - reply.Cost
 		monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(reply.Cost))
 		c.State.Vault.Level += reply.Levels
-		c.State.Vault.Capacity += 10 * reply.Levels
+		c.State.Vault.Capacity *= 2
 		return true, c, reply, err
 	}
 	return false, c, reply, err
