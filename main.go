@@ -210,9 +210,8 @@ func vaultmineractivate(c *gin.Context) {
 	if success {
 		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("v4ultM1ner.exe activated. %f coins will be mined to Vault.", commandCenter.State.Inventory.VaultMiner.AmountLeft), "state": commandCenter.State})
 		return
-	} else {
-		c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
 	}
+	c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
 }
 
 //TODO: Subscribe to game master to get game settings

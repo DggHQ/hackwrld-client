@@ -213,7 +213,7 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Funds.RWMutex = &sync.RWMutex{}
 	c.State.Vault.RWMutex = &sync.RWMutex{}
 	c.State.LastSteals = []StealData{}
-	// Initialive Inventory
+	// Initialice Inventory
 	c.State.Inventory.VaultMiner.AmountLeft = 0
 	c.State.Inventory.VaultMiner.Enabled = false
 
