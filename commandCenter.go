@@ -66,7 +66,7 @@ type State struct {
 			AmountLeft float32 `json:"amountLeft"`
 			Enabled    bool    `json:"enabled"`
 		} `json:"vaultMiner"`
-	}
+	} `json:"inventory"`
 }
 
 // type Inventory struct {
