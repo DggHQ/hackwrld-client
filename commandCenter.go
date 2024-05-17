@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -60,16 +61,20 @@ type State struct {
 		ExpirationTimeStamp int64 `json:"expirationTimestamp"`
 	} `json:"cooldown"`
 	LastSteals []StealData `json:"lastSteals"`
+	Inventory  struct {
+		VaultMiner struct {
+			AmountLeft float32 `json:"amountLeft"`
+			Enabled    bool    `json:"enabled"`
+		} `json:"vaultMiner"`
+	} `json:"inventory"`
 }
 
-type Inventory struct {
-	VaultMiner struct {
-		Name                string `json:"name"`
-		Amount              uint   `json:"amount"`
-		Enabled             bool   `json:"enabled"`
-		ExpirationTimeStamp int64  `json:"expirationTimestamp"`
-	} `json:"vaultMiner"`
-}
+// type Inventory struct {
+// 	VaultMiner struct {
+// 		AmountLeft float32 `json:"amountLeft"`
+// 		Enabled    bool    `json:"enabled"`
+// 	} `json:"vaultMiner"`
+// }
 
 // Hold data pertaining to last stealer
 type StealData struct {
@@ -120,6 +125,40 @@ func getEnvToArray(key, defaultValue string) []string {
 // Get the current player level
 func (c *CommandCenter) GetPlayerLevel() float32 {
 	return c.State.Stealer.Level + c.State.Firewall.Level + c.State.CryptoMiner.Level + c.State.Scanner.Level
+}
+
+// Enables the VaultMiner.
+func (c *CommandCenter) ActivateVaultMiner() (bool, error) {
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
+	// Do not activate when already enabled
+	if c.State.Inventory.VaultMiner.Enabled {
+		return false, errors.New("VaultMiner is already activated.")
+	}
+	// Calculate cost and allow / deny based on funds available
+	cost := c.State.Vault.Capacity * 0.2
+	if cost > c.State.Funds.Amount {
+		return false, fmt.Errorf("Could not activate VaultMiner. Costs %f", cost)
+	}
+	c.State.Funds.Amount -= cost
+	c.State.Inventory.VaultMiner.Enabled = true
+	return true, nil
+}
+
+// Mine to vault
+// If the mined coin is larger than the amount left on the vault miner then just send the difference to the vault.
+// Set Enabled to false if AmountLeft is 0
+func (c *CommandCenter) MineCoinToVault(minedCoin float32) {
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
+	if minedCoin > c.State.Inventory.VaultMiner.AmountLeft {
+		c.State.Vault.Amount += minedCoin - c.State.Inventory.VaultMiner.AmountLeft
+		c.State.Inventory.VaultMiner.AmountLeft = 0
+		c.State.Inventory.VaultMiner.Enabled = false
+	} else {
+		c.State.Vault.Amount += minedCoin
+		c.State.Inventory.VaultMiner.AmountLeft -= minedCoin
+	}
 }
 
 // Update StealList of State
@@ -174,6 +213,9 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Funds.RWMutex = &sync.RWMutex{}
 	c.State.Vault.RWMutex = &sync.RWMutex{}
 	c.State.LastSteals = []StealData{}
+	// Initialice Inventory
+	c.State.Inventory.VaultMiner.AmountLeft = 0
+	c.State.Inventory.VaultMiner.Enabled = false
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
@@ -329,10 +371,17 @@ func (c *CommandCenter) SaveStateImmediate() {
 func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
+
 		minerLevel := c.State.CryptoMiner.Level
-		c.State.Funds.Lock()
-		c.State.Funds.Amount += baseMineRate * float32(minerLevel)
-		c.State.Funds.Unlock()
+		if c.State.Inventory.VaultMiner.Enabled && (c.State.Vault.Amount != c.State.Vault.Capacity) {
+			// Check if VaultMiner is activated and if the vault is currently full
+			c.MineCoinToVault(baseMineRate * float32(minerLevel))
+		} else {
+			// If not then just mine to "unsafe" wallet
+			c.State.Funds.Lock()
+			c.State.Funds.Amount += baseMineRate * float32(minerLevel)
+			c.State.Funds.Unlock()
+		}
 		monitor.MinedCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(baseMineRate * float32(minerLevel)))
 		time.Sleep(time.Second * 1)
 	}
