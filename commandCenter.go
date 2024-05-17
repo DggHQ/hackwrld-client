@@ -141,7 +141,7 @@ func (c *CommandCenter) ActivateVaultMiner() (bool, error) {
 		return false, fmt.Errorf("Could not activate VaultMiner. Costs %f", cost)
 	}
 	c.State.Vault.Amount -= cost
-	c.State.Inventory.VaultMiner.AmountLeft = c.State.Vault.Capacity
+	c.State.Inventory.VaultMiner.AmountLeft = c.State.Vault.Capacity * 0.5
 	c.State.Inventory.VaultMiner.Enabled = true
 	return true, nil
 }

@@ -208,7 +208,7 @@ func vaultmineractivate(c *gin.Context) {
 	success, err := commandCenter.ActivateVaultMiner()
 	// We take the error message as the reply
 	if success {
-		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("v4ultM1ner.exe activated. %f coins will be mined to Vault.", commandCenter.GetState().State.Inventory.VaultMiner.AmountLeft), "state": commandCenter.State})
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("v4ultM1ner.exe activated. %f coins will be mined to Vault.", commandCenter.GetState().State.Inventory.VaultMiner.AmountLeft*0.5), "state": commandCenter.State})
 		return
 	}
 	c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
