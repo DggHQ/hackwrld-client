@@ -378,7 +378,8 @@ func (c *CommandCenter) Mine(wg *sync.WaitGroup) {
 			// Check if VaultMiner is activated and if the vault is currently full
 			minedCoin := baseMineRate * float32(minerLevel)
 			if c.State.Vault.Amount+minedCoin > c.State.Vault.Capacity {
-				diff := (c.State.Vault.Amount + minedCoin) - c.State.Vault.Capacity
+				// diff := (c.State.Vault.Amount + minedCoin) - c.State.Vault.Capacity
+				diff := c.State.Vault.Capacity - c.State.Vault.Amount
 				c.MineCoinToVault(diff)
 			} else {
 				c.MineCoinToVault(minedCoin)
