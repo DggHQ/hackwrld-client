@@ -157,8 +157,19 @@ func (c *CommandCenter) MineCoinToVault(minedCoin float32) {
 		c.State.Inventory.VaultMiner.AmountLeft = 0
 		c.State.Inventory.VaultMiner.Enabled = false
 	} else {
-		c.State.Vault.Amount += minedCoin
-		c.State.Inventory.VaultMiner.AmountLeft -= minedCoin
+		// If the next coin would exceed capacity just set it to max
+		if c.State.Vault.Amount+minedCoin > c.State.Vault.Capacity {
+			// Get currenty Amount + Coin (9.8 + 0.5) = 10.3
+			// 10.3 - 10 = 0.3
+			// AmountLeft -= 0.3
+			diff := (c.State.Vault.Amount + minedCoin) - c.State.Vault.Capacity
+			c.State.Vault.Amount = c.State.Vault.Capacity
+			// Set remove that diff from AmountLeft
+			c.State.Inventory.VaultMiner.AmountLeft -= diff
+		} else {
+			c.State.Vault.Amount += minedCoin
+			c.State.Inventory.VaultMiner.AmountLeft -= minedCoin
+		}
 	}
 }
 
