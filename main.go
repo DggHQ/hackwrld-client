@@ -207,12 +207,11 @@ func vaultupgrade(c *gin.Context) {
 func vaultmineractivate(c *gin.Context) {
 	success, err := commandCenter.ActivateVaultMiner()
 	// We take the error message as the reply
-	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State})
-	}
 	if success {
-		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State})
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("v4ultM1ner.exe activated. %f coins will be mined to Vault.", commandCenter.State.Inventory.VaultMiner.AmountLeft), "state": commandCenter.State})
 		return
+	} else {
+		c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
 	}
 }
 

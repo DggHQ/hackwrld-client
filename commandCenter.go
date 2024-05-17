@@ -133,7 +133,7 @@ func (c *CommandCenter) ActivateVaultMiner() (bool, error) {
 	defer c.State.Vault.Unlock()
 	// Do not activate when already enabled
 	if c.State.Inventory.VaultMiner.Enabled {
-		return false, errors.New("VaultMiner is already activated")
+		return false, errors.New("VaultMiner is already activated.")
 	}
 	// Calculate cost and allow / deny based on funds available
 	cost := c.State.Vault.Capacity * 0.2
