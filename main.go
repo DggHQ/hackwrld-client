@@ -203,6 +203,19 @@ func vaultupgrade(c *gin.Context) {
 	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
 }
 
+// Handle vault upgrade endpoint
+func vaultmineractivate(c *gin.Context) {
+	success, err := commandCenter.ActivateVaultMiner()
+	// We take the error message as the reply
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"message": "Unknown error.", "state": commandCenter.State})
+	}
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": "upgraded", "state": commandCenter.State})
+		return
+	}
+}
+
 //TODO: Subscribe to game master to get game settings
 
 func init() {
@@ -249,6 +262,7 @@ func main() {
 	router.POST("/upgrade/stealer/max", stealerupgrademax)
 	router.POST("/vault/store", storevault)
 	router.POST("/upgrade/vault", vaultupgrade)
+	router.POST("/shop/activate/vaultminer", vaultmineractivate)
 	// router.POST("/vault/withdraw", withdrawvault)
 	router.POST("/attack/out", func(ctx *gin.Context) {})
 	router.POST("/scan/out", scanout)
