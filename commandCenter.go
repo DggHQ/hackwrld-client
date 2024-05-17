@@ -137,10 +137,10 @@ func (c *CommandCenter) ActivateVaultMiner() (bool, error) {
 	}
 	// Calculate cost and allow / deny based on funds available
 	cost := c.State.Vault.Capacity * 0.2
-	if cost > c.State.Funds.Amount {
+	if cost > c.State.Vault.Amount {
 		return false, fmt.Errorf("Could not activate VaultMiner. Costs %f", cost)
 	}
-	c.State.Funds.Amount -= cost
+	c.State.Vault.Amount -= cost
 	c.State.Inventory.VaultMiner.Enabled = true
 	return true, nil
 }
