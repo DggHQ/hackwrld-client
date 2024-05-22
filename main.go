@@ -214,6 +214,17 @@ func vaultmineractivate(c *gin.Context) {
 	c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
 }
 
+// Handle vault upgrade endpoint
+func panictransferactivate(c *gin.Context) {
+	success, err := commandCenter.ActivatePanicTransfer()
+	// We take the error message as the reply
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("panictransfer.bin activated. For %.0f enemy scans, your coins will be automatically transferred to the vault for you.", commandCenter.GetState().State.Inventory.PanicTransfer.AmountLeft), "state": commandCenter.State})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
+}
+
 //TODO: Subscribe to game master to get game settings
 
 func init() {

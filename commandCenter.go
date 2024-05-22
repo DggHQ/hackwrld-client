@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"strings"
@@ -66,6 +67,14 @@ type State struct {
 			AmountLeft float32 `json:"amountLeft"`
 			Enabled    bool    `json:"enabled"`
 		} `json:"vaultMiner"`
+		ScanScrambler struct {
+			AmountLeft float32 `json:"amountLeft"`
+			Enabled    bool    `json:"enabled"`
+		} `json:"scanScrambler"`
+		PanicTransfer struct {
+			AmountLeft float32 `json:"amountLeft"`
+			Enabled    bool    `json:"enabled"`
+		} `json:"panicTransfer"`
 	} `json:"inventory"`
 }
 
@@ -141,9 +150,43 @@ func (c *CommandCenter) ActivateVaultMiner() (bool, error) {
 		return false, fmt.Errorf("Could not activate VaultMiner. Costs %f", cost)
 	}
 	c.State.Vault.Amount -= cost
+	monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
 	c.State.Inventory.VaultMiner.AmountLeft = c.State.Vault.Capacity * 0.5
 	c.State.Inventory.VaultMiner.Enabled = true
 	return true, nil
+}
+
+func (c *CommandCenter) ActivatePanicTransfer() (bool, error) {
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
+	// Do not activate when already enabled
+	if c.State.Inventory.PanicTransfer.Enabled {
+		return false, errors.New("PanicTransfer is already activated.")
+	}
+	// Calculate cost and allow / deny based on funds available
+	cost := c.GetPlayerLevel() / 10
+	if cost > c.State.Vault.Amount {
+		return false, fmt.Errorf("Could not activate PanicTransfer. Costs %f", cost)
+	}
+	c.State.Vault.Amount -= cost
+	monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
+	c.State.Inventory.PanicTransfer.AmountLeft = float32(math.Ceil(float64(c.GetPlayerLevel()) / 20))
+	c.State.Inventory.PanicTransfer.Enabled = true
+	return true, nil
+}
+
+func (c *CommandCenter) PanicTransfer() {
+	// Check if this panictransfer would cause the amountleft to sink to 0 or greater than 0
+	if (c.State.Inventory.PanicTransfer.AmountLeft - 1) >= 0 {
+		// Remove 1 from amount left
+		c.State.Inventory.PanicTransfer.AmountLeft -= 1
+		// Store in Vault
+		c.StoreVault()
+		// If amount left after transfer is 0 disable panictransfer
+		if c.State.Inventory.PanicTransfer.AmountLeft == 0 {
+			c.State.Inventory.PanicTransfer.Enabled = false
+		}
+	}
 }
 
 // Mine to vault
@@ -585,10 +628,14 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 		} else {
 			// If the command center is foreign and their scanner level is higher than this firewall level, allow scan
 			if foreignCommandCenter.Scanner.Level > c.State.Firewall.Level {
-
+				// If PanicTransfer is activated, transfer to vault
+				if c.State.Inventory.PanicTransfer.Enabled {
+					log.Panicln("PanicTransfer triggered.")
+					c.PanicTransfer()
+				}
 				tmpState := c.State
-				// gpt71 countermeasure
-				if foreignCommandCenter.ID == "180887" {
+				// gpt71 and Josh countermeasure
+				if foreignCommandCenter.ID == "180887" || foreignCommandCenter.ID == "91548" {
 					//tmpState.CoolDown.Time += time.Duration(time.Duration(rand.Intn(10)*100 + 10).Seconds())
 					tmpState.CoolDown.ExpirationTimeStamp -= rand.Int63n(100)
 				}
