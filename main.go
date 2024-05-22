@@ -272,6 +272,7 @@ func main() {
 	router.POST("/vault/store", storevault)
 	router.POST("/upgrade/vault", vaultupgrade)
 	router.POST("/shop/activate/vaultminer", vaultmineractivate)
+	router.POST("/shop/activate/panictransfer", panictransferactivate)
 	// router.POST("/vault/withdraw", withdrawvault)
 	router.POST("/attack/out", func(ctx *gin.Context) {})
 	router.POST("/scan/out", scanout)
