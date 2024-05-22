@@ -257,9 +257,11 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Funds.RWMutex = &sync.RWMutex{}
 	c.State.Vault.RWMutex = &sync.RWMutex{}
 	c.State.LastSteals = []StealData{}
-	// Initialice Inventory
+	// Initialize Inventory
 	c.State.Inventory.VaultMiner.AmountLeft = 0
 	c.State.Inventory.VaultMiner.Enabled = false
+	c.State.Inventory.PanicTransfer.AmountLeft = 0
+	c.State.Inventory.PanicTransfer.Enabled = false
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
