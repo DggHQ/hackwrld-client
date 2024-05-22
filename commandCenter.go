@@ -632,7 +632,7 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 			if foreignCommandCenter.Scanner.Level > c.State.Firewall.Level {
 				// If PanicTransfer is activated, transfer to vault
 				if c.State.Inventory.PanicTransfer.Enabled {
-					log.Panicln("PanicTransfer triggered.")
+					log.Println("PanicTransfer triggered.")
 					c.PanicTransfer()
 				}
 				tmpState := c.State
