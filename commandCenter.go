@@ -152,7 +152,7 @@ func (c *CommandCenter) ActivateVaultMiner() (bool, error) {
 	}
 	c.State.Vault.Amount -= cost
 	monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
-	c.State.Inventory.VaultMiner.AmountLeft = c.State.Vault.Capacity * 0.5
+	c.State.Inventory.VaultMiner.AmountLeft = c.State.Vault.Capacity * 0.75
 	c.State.Inventory.VaultMiner.Enabled = true
 	return true, nil
 }
