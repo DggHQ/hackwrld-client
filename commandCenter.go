@@ -215,6 +215,7 @@ func (c *CommandCenter) ActivateScanScrambler() (bool, error) {
 func (c *CommandCenter) ScanScramble() {
 	// Check if this scramble would cause the amountleft to sink to 0 or greater than 0
 	if (c.State.Inventory.ScanScrambler.AmountLeft - 1) >= 0 {
+		log.Println("ScanScramlbe triggered")
 		// Remove 1 from amount left
 		c.State.Inventory.ScanScrambler.AmountLeft -= 1
 		// Generate random unix timestamp in the future
