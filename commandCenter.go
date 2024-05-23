@@ -301,6 +301,8 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Inventory.VaultMiner.Enabled = false
 	c.State.Inventory.PanicTransfer.AmountLeft = 0
 	c.State.Inventory.PanicTransfer.Enabled = false
+	c.State.Inventory.ScanScrambler.AmountLeft = 0
+	c.State.Inventory.ScanScrambler.Enabled = false
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
