@@ -76,6 +76,9 @@ type State struct {
 			AmountLeft float32 `json:"amountLeft"`
 			Enabled    bool    `json:"enabled"`
 		} `json:"panicTransfer"`
+		NFT struct {
+			Amount int `json:"amount"`
+		} `json:"nft"`
 	} `json:"inventory"`
 }
 
@@ -306,6 +309,7 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Inventory.PanicTransfer.Enabled = false
 	c.State.Inventory.ScanScrambler.AmountLeft = 0
 	c.State.Inventory.ScanScrambler.Enabled = false
+	c.State.Inventory.NFT.Amount = 0
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
@@ -653,6 +657,20 @@ func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn, upgradeToMax bool) (bo
 		return true, c, reply, nil
 	}
 	return false, c, reply, nil
+}
+
+// Send playerinfo for leaderboard container
+func (c *CommandCenter) SendPlayerInfo(nc *nats.Conn) error {
+	if _, err := nc.Subscribe(fmt.Sprintf("commandcenter.%s.info", c.ID), func(m *nats.Msg) {
+		jsonReply, err := json.Marshal(c.State)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		m.Respond(jsonReply)
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Subscribe to scan topic to reply to other players when they scan.

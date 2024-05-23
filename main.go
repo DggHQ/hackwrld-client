@@ -271,6 +271,8 @@ func main() {
 	go commandCenter.Mine(wg)
 	// Listen to scan topic and reply if conditions are met
 	go commandCenter.ReplyScan(nc)
+	// Send Player info to leaderboard container when queried
+	go commandCenter.SendPlayerInfo(nc)
 	// Listen to steal events on client
 	go commandCenter.ReplySteal(nc)
 	// Run task to continuosly save state each minute.
