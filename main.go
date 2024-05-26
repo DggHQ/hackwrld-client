@@ -203,7 +203,7 @@ func vaultupgrade(c *gin.Context) {
 	c.JSON(http.StatusForbidden, gin.H{"message": "not enough funds.", "state": commandCenter.State, "reply": reply})
 }
 
-// Handle vault upgrade endpoint
+// Handle vault miner endpoint
 func vaultmineractivate(c *gin.Context) {
 	success, err := commandCenter.ActivateVaultMiner()
 	// We take the error message as the reply
@@ -212,6 +212,36 @@ func vaultmineractivate(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
+}
+
+// Handle panic transfer endpoint
+func panictransferactivate(c *gin.Context) {
+	success, err := commandCenter.ActivatePanicTransfer()
+	// We take the error message as the reply
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("panictransfer.bin activated. For %.0f enemy scans, your coins will be automatically transferred to the vault for you.", commandCenter.GetState().State.Inventory.PanicTransfer.AmountLeft), "state": commandCenter.State})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
+}
+
+// Handle scan scrambler endpoint
+func scanscrambleractivate(c *gin.Context) {
+	success, err := commandCenter.ActivateScanScrambler()
+	// We take the error message as the reply
+	if success {
+		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("scanscr4mbl.sys activated. For %.0f enemy scans, fake cooldown times will be sent", commandCenter.GetState().State.Inventory.ScanScrambler.AmountLeft), "state": commandCenter.State})
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{"message": err.Error(), "state": commandCenter.State})
+}
+
+// Cheat endpoint only available locally and not reachable via webgui
+func cheat(c *gin.Context) {
+	commandCenter.State.Vault.Lock()
+	defer commandCenter.State.Vault.Unlock()
+	commandCenter.State.Vault.Amount += 1000
+	c.JSON(http.StatusOK, gin.H{"success": "added coins to vault."})
 }
 
 //TODO: Subscribe to game master to get game settings
@@ -241,6 +271,8 @@ func main() {
 	go commandCenter.Mine(wg)
 	// Listen to scan topic and reply if conditions are met
 	go commandCenter.ReplyScan(nc)
+	// Send Player info to leaderboard container when queried
+	go commandCenter.SendPlayerInfo(nc)
 	// Listen to steal events on client
 	go commandCenter.ReplySteal(nc)
 	// Run task to continuosly save state each minute.
@@ -261,11 +293,14 @@ func main() {
 	router.POST("/vault/store", storevault)
 	router.POST("/upgrade/vault", vaultupgrade)
 	router.POST("/shop/activate/vaultminer", vaultmineractivate)
+	router.POST("/shop/activate/panictransfer", panictransferactivate)
+	router.POST("/shop/activate/scanscrambler", scanscrambleractivate)
 	// router.POST("/vault/withdraw", withdrawvault)
 	router.POST("/attack/out", func(ctx *gin.Context) {})
 	router.POST("/scan/out", scanout)
 	router.POST("/steal", steal)
 	router.GET("/state", state)
+	router.GET("/cheat", cheat)
 	router.GET("/metrics", promHandler())
 
 	router.Run(fmt.Sprintf("0.0.0.0:%s", getEnv("PORT", "8088")))

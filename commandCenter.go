@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"strings"
@@ -27,7 +28,8 @@ type CommandCenter struct {
 		LastAttackTime time.Time
 		AttackInterval time.Duration
 	}
-	State State `json:"state"`
+	ScrambledTimeStamp int64
+	State              State `json:"state"`
 }
 
 type State struct {
@@ -66,6 +68,17 @@ type State struct {
 			AmountLeft float32 `json:"amountLeft"`
 			Enabled    bool    `json:"enabled"`
 		} `json:"vaultMiner"`
+		ScanScrambler struct {
+			AmountLeft float32 `json:"amountLeft"`
+			Enabled    bool    `json:"enabled"`
+		} `json:"scanScrambler"`
+		PanicTransfer struct {
+			AmountLeft float32 `json:"amountLeft"`
+			Enabled    bool    `json:"enabled"`
+		} `json:"panicTransfer"`
+		NFT struct {
+			Amount int `json:"amount"`
+		} `json:"nft"`
 	} `json:"inventory"`
 }
 
@@ -141,9 +154,85 @@ func (c *CommandCenter) ActivateVaultMiner() (bool, error) {
 		return false, fmt.Errorf("Could not activate VaultMiner. Costs %f", cost)
 	}
 	c.State.Vault.Amount -= cost
-	c.State.Inventory.VaultMiner.AmountLeft = c.State.Vault.Capacity * 0.5
+	monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
+	c.State.Inventory.VaultMiner.AmountLeft = c.State.Vault.Capacity * 0.75
 	c.State.Inventory.VaultMiner.Enabled = true
 	return true, nil
+}
+
+func (c *CommandCenter) ActivatePanicTransfer() (bool, error) {
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
+	// Do not activate when already enabled
+	if c.State.Inventory.PanicTransfer.Enabled {
+		return false, errors.New("PanicTransfer is already activated.")
+	}
+	// Calculate cost and allow / deny based on funds available
+	cost := c.GetPlayerLevel() / 10
+	if cost > c.State.Vault.Amount {
+		return false, fmt.Errorf("Could not activate PanicTransfer. Costs %f", cost)
+	}
+	c.State.Vault.Amount -= cost
+	monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
+	c.State.Inventory.PanicTransfer.AmountLeft = float32(math.Ceil(float64(c.GetPlayerLevel()) / 20))
+	c.State.Inventory.PanicTransfer.Enabled = true
+	return true, nil
+}
+
+func (c *CommandCenter) PanicTransfer() {
+	// Check if this panictransfer would cause the amountleft to sink to 0 or greater than 0
+	if (c.State.Inventory.PanicTransfer.AmountLeft - 1) >= 0 {
+		// Remove 1 from amount left if vault is not full
+		if c.State.Vault.Amount != c.State.Vault.Capacity {
+			c.State.Inventory.PanicTransfer.AmountLeft -= 1
+			// Store in Vault
+			log.Println("PanicTransfer Triggered.")
+			c.StoreVault()
+		}
+		// If amount left after transfer is 0 disable panictransfer
+		if c.State.Inventory.PanicTransfer.AmountLeft == 0 {
+			c.State.Inventory.PanicTransfer.Enabled = false
+		}
+	}
+}
+
+func (c *CommandCenter) ActivateScanScrambler() (bool, error) {
+	c.State.Vault.Lock()
+	defer c.State.Vault.Unlock()
+	// Do not activate when already enabled
+	if c.State.Inventory.ScanScrambler.Enabled {
+		return false, errors.New("ScanScrambler is already activated.")
+	}
+	// Calculate cost and allow / deny based on funds available
+	cost := c.GetPlayerLevel() / 5
+	if cost > c.State.Vault.Amount {
+		return false, fmt.Errorf("Could not activate ScanScrambler. Costs %f", cost)
+	}
+	c.State.Vault.Amount -= cost
+	monitor.SpentCoins.WithLabelValues(c.ID, c.Nick, c.Team).Add(float64(cost))
+	c.State.Inventory.ScanScrambler.AmountLeft = float32(math.Ceil(float64(c.GetPlayerLevel()) / 50))
+	c.State.Inventory.ScanScrambler.Enabled = true
+	return true, nil
+}
+
+func (c *CommandCenter) ScanScramble() {
+	// Check if this scramble would cause the amountleft to sink to 0 or greater than 0
+	if (c.State.Inventory.ScanScrambler.AmountLeft - 1) >= 0 {
+
+		// Remove 1 from amount left
+		c.State.Inventory.ScanScrambler.AmountLeft -= 1
+		// Generate random unix timestamp in the future between 5 and 10 minutes
+		max := 600
+		min := 300
+		randomTime := time.Duration(rand.Intn(max-min)+min) * time.Second
+		scrambledTime := int64(time.Now().Add(randomTime).Unix())
+		log.Printf("Sent random time: %d", scrambledTime)
+		c.ScrambledTimeStamp = scrambledTime
+		// If amount left after transfer is 0 disable scrambler
+		if c.State.Inventory.ScanScrambler.AmountLeft == 0 {
+			c.State.Inventory.ScanScrambler.Enabled = false
+		}
+	}
 }
 
 // Mine to vault
@@ -205,6 +294,7 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Stealer.Level = 1
 	c.State.Vault.Level = 1
 	c.State.Vault.Capacity = 10
+	c.ScrambledTimeStamp = 0
 	// Set initial protection period on boot
 	c.StealData.LastAttackTime = time.Now()
 	// Configure starting attack interval
@@ -214,9 +304,14 @@ func (c *CommandCenter) Init(config clientv3.Config) CommandCenter {
 	c.State.Funds.RWMutex = &sync.RWMutex{}
 	c.State.Vault.RWMutex = &sync.RWMutex{}
 	c.State.LastSteals = []StealData{}
-	// Initialice Inventory
+	// Initialize Inventory
 	c.State.Inventory.VaultMiner.AmountLeft = 0
 	c.State.Inventory.VaultMiner.Enabled = false
+	c.State.Inventory.PanicTransfer.AmountLeft = 0
+	c.State.Inventory.PanicTransfer.Enabled = false
+	c.State.Inventory.ScanScrambler.AmountLeft = 0
+	c.State.Inventory.ScanScrambler.Enabled = false
+	c.State.Inventory.NFT.Amount = 0
 
 	// Init etcd client
 	cli, err := clientv3.New(config)
@@ -566,6 +661,20 @@ func (c *CommandCenter) UpgradeCryptoMiner(nc *nats.Conn, upgradeToMax bool) (bo
 	return false, c, reply, nil
 }
 
+// Send playerinfo for leaderboard container
+func (c *CommandCenter) SendPlayerInfo(nc *nats.Conn) error {
+	if _, err := nc.Subscribe(fmt.Sprintf("commandcenter.%s.info", c.ID), func(m *nats.Msg) {
+		jsonReply, err := json.Marshal(c.State)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		m.Respond(jsonReply)
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Subscribe to scan topic to reply to other players when they scan.
 // This not reply when the incoming command center id is the same as the current instance
 // When the foreign command center scanner level has a higher level than this command center's firewall, reply
@@ -585,13 +694,21 @@ func (c *CommandCenter) ReplyScan(nc *nats.Conn) error {
 		} else {
 			// If the command center is foreign and their scanner level is higher than this firewall level, allow scan
 			if foreignCommandCenter.Scanner.Level > c.State.Firewall.Level {
-
-				tmpState := c.State
-				// gpt71 countermeasure
-				if foreignCommandCenter.ID == "180887" {
-					//tmpState.CoolDown.Time += time.Duration(time.Duration(rand.Intn(10)*100 + 10).Seconds())
-					tmpState.CoolDown.ExpirationTimeStamp -= rand.Int63n(100)
+				// If PanicTransfer is activated, transfer to vault
+				if c.State.Inventory.PanicTransfer.Enabled {
+					c.PanicTransfer()
 				}
+				tmpState := c.State
+				if c.State.Inventory.ScanScrambler.Enabled {
+					// Use method to generate a random unix timestamp in the future
+					c.ScanScramble()
+					tmpState.CoolDown.ExpirationTimeStamp = c.ScrambledTimeStamp
+				}
+				// // gpt71 and Josh countermeasure
+				// if foreignCommandCenter.ID == "180887" || foreignCommandCenter.ID == "91548" {
+				// 	//tmpState.CoolDown.Time += time.Duration(time.Duration(rand.Intn(10)*100 + 10).Seconds())
+				// 	tmpState.CoolDown.ExpirationTimeStamp -= rand.Int63n(100)
+				// }
 
 				jsonReply, err := json.Marshal(tmpState) //json.Marshal(c.State)
 				if err != nil {
