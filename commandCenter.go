@@ -221,8 +221,10 @@ func (c *CommandCenter) ScanScramble() {
 
 		// Remove 1 from amount left
 		c.State.Inventory.ScanScrambler.AmountLeft -= 1
-		// Generate random unix timestamp in the future
-		randomTime := time.Duration(rand.Intn(600)) * time.Second
+		// Generate random unix timestamp in the future between 5 and 10 minutes
+		max := 600
+		min := 300
+		randomTime := time.Duration(rand.Intn(max-min)+min) * time.Second
 		scrambledTime := int64(time.Now().Add(randomTime).Unix())
 		log.Printf("Sent random time: %d", scrambledTime)
 		c.ScrambledTimeStamp = scrambledTime
