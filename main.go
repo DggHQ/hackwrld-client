@@ -33,11 +33,14 @@ var (
 
 // Handle state endpoint
 func state(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/state").Inc()
 	c.JSON(http.StatusOK, gin.H{"state": commandCenter.GetState().State})
 }
 
 // Handle miner upgrade endpoint
 func minerupgrade(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/miner").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeCryptoMiner(nc, false)
 	if err != nil {
 		log.Fatalln(err)
@@ -52,6 +55,8 @@ func minerupgrade(c *gin.Context) {
 
 // Handle miner upgrade endpoint
 func minerupgrademax(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/miner/max").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeCryptoMiner(nc, true)
 	if err != nil {
 		log.Fatalln(err)
@@ -66,6 +71,8 @@ func minerupgrademax(c *gin.Context) {
 
 // Handle scanner upgrade endpoint
 func scannerupgrade(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/scanner").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeScanner(nc, false)
 	if err != nil {
 		log.Fatalln(err)
@@ -80,6 +87,8 @@ func scannerupgrade(c *gin.Context) {
 
 // Handle scanner upgrade endpoint
 func scannerupgrademax(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/scanner/max").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeScanner(nc, true)
 	if err != nil {
 		log.Fatalln(err)
@@ -94,6 +103,8 @@ func scannerupgrademax(c *gin.Context) {
 
 // Handle firewall upgrade endpoint
 func firewallupgrade(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/firewall").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeFirewall(nc, false)
 	if err != nil {
 		log.Fatalln(err)
@@ -108,6 +119,8 @@ func firewallupgrade(c *gin.Context) {
 
 // Handle firewall upgrade endpoint
 func firewallupgrademax(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/firewall/max").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeFirewall(nc, true)
 	if err != nil {
 		log.Fatalln(err)
@@ -122,6 +135,8 @@ func firewallupgrademax(c *gin.Context) {
 
 // Handle stealer upgrade endpoint
 func stealerupgrade(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/stealer").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeStealer(nc, false)
 	if err != nil {
 		log.Fatalln(err)
@@ -136,6 +151,8 @@ func stealerupgrade(c *gin.Context) {
 
 // Handle stealer upgrade endpoint
 func stealerupgrademax(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/stealer/max").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeStealer(nc, true)
 	if err != nil {
 		log.Fatalln(err)
@@ -150,6 +167,8 @@ func stealerupgrademax(c *gin.Context) {
 
 // Handle scan outgoing endpoint
 func scanout(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/scan/out").Inc()
+
 	scans, msg, err := commandCenter.RequestScan(nc)
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": msg})
@@ -161,6 +180,8 @@ func scanout(c *gin.Context) {
 
 // Handle storing coins in vault
 func storevault(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/vault/store").Inc()
+
 	transferAmount := commandCenter.StoreVault()
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Transferred %f to vault.", transferAmount)})
 }
@@ -173,6 +194,8 @@ func storevault(c *gin.Context) {
 
 // Handle steal event
 func steal(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/steal").Inc()
+
 	var data StealRequest
 	// Could not parse body
 	if err := c.ShouldBindJSON(&data); err != nil {
@@ -191,6 +214,8 @@ func steal(c *gin.Context) {
 
 // Handle vault upgrade endpoint
 func vaultupgrade(c *gin.Context) {
+	monitor.Requests.WithLabelValues(commandCenter.ID, commandCenter.Nick, "/upgrade/vault").Inc()
+
 	success, commandCenter, reply, err := commandCenter.UpgradeVault(nc, false)
 	if err != nil {
 		log.Fatalln(err)

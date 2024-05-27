@@ -6,6 +6,7 @@ import (
 
 type Monitor struct {
 	MinedCoins  *prometheus.CounterVec
+	Requests    *prometheus.CounterVec
 	SpentCoins  *prometheus.CounterVec
 	LostCoins   *prometheus.CounterVec
 	StolenCoins *prometheus.CounterVec
@@ -13,6 +14,9 @@ type Monitor struct {
 }
 
 func (m *Monitor) Init() *Monitor {
+	m.Requests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "hackwrld_endpoint_request_count",
+		Help: "Gets the request count for http endpoints"}, []string{"id", "nick", "endpoint"})
 	m.MinedCoins = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "hackwrld_mined_coins",
 		Help: "Total amount of mined coins"}, []string{"id", "nick", "team"})
@@ -30,6 +34,7 @@ func (m *Monitor) Init() *Monitor {
 		Help: "The current cooldown time of the player"}, []string{"id", "nick"})
 
 	prometheus.MustRegister(m.MinedCoins)
+	prometheus.MustRegister(m.Requests)
 	prometheus.MustRegister(m.SpentCoins)
 	prometheus.MustRegister(m.LostCoins)
 	prometheus.MustRegister(m.StolenCoins)
