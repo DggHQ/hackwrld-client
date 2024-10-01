@@ -25,7 +25,7 @@ var (
 	commandCenter CommandCenter
 	nc, natsError = nats.Connect(getEnv("NATS_HOST", "localhost"), nil, nats.PingInterval(20*time.Second), nats.MaxPingsOutstanding(5))
 	clientConfig  = clientv3.Config{
-		Endpoints:   getEnvToArray("ETCD_ENDPOINTS", "10.10.90.5:2379;10.10.90.6:2379"),
+		Endpoints:   getEnvToArray("ETCD_ENDPOINTS", "localhost:2379"),
 		DialTimeout: time.Second * 5,
 	}
 	monitor = Monitor{}
