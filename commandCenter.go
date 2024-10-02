@@ -980,14 +980,17 @@ func (c *CommandCenter) StealFromTarget(targetId string, nc *nats.Conn) (StealRe
 	// Publish steal event to game master
 	nc.Publish("stealevent", []byte(state))
 	nc.PublishRequest(fmt.Sprintf("commandcenter.%s.stealEndpoint", targetId), fmt.Sprintf("commandcenter.%s.stealReply", c.ID), []byte(state))
-
 	// Wait for a single response
 	for {
-		msg, err := sub.NextMsg(5 * time.Second)
+		msg, err := sub.NextMsg(2 * time.Second)
 		if err != nil {
-			log.Fatal(err)
+			return stealReply, "Target does not exist.", err
 		}
-		json.Unmarshal(msg.Data, &stealReply)
+		err = json.Unmarshal(msg.Data, &stealReply)
+		if err != nil {
+			log.Println(err)
+			break
+		}
 		// Send stealreply data to stealresult topic to let others know who stole from whom
 		nc.Publish("stealresult", msg.Data)
 		nc.Flush()
